@@ -6,7 +6,10 @@
 //! duplicate — and a window closed while the app kept running in the menu bar
 //! can be brought back.
 
-use gpui::{App, AppContext as _, Bounds, Size, Styled as _, WindowBounds, WindowOptions, px};
+use gpui::{
+    App, AppContext as _, Bounds, Entity, Size, Styled as _, Window, WindowBounds, WindowOptions,
+    px,
+};
 use gpui_component::{ActiveTheme as _, Root};
 use openlogi_core::brand::APP_ID;
 use tracing::warn;
@@ -38,6 +41,21 @@ fn window_options(cx: &mut App) -> WindowOptions {
     }
 }
 
+/// The main window's content: themed [`AppView`] under the component `Root`.
+/// Shared with the accessibility tests, so they exercise the production tree.
+pub(crate) fn build_root(window: &mut Window, cx: &mut App) -> Entity<Root> {
+    theme::apply_from_settings(Some(window), cx);
+
+    let view = cx.new(|cx| AppView::new(window, cx));
+
+    let appearance_obs = window.observe_window_appearance(|window, cx| {
+        theme::apply_from_settings(Some(window), cx);
+    });
+    view.update(cx, |v, _| v.set_appearance_obs(appearance_obs));
+
+    cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
+}
+
 /// Open the main window — or focus the one already open.
 pub fn open(cx: &mut App) {
     let existing = cx.default_global::<WindowRegistry>().main;
@@ -51,18 +69,7 @@ pub fn open(cx: &mut App) {
     }
 
     let options = window_options(cx);
-    let opened = cx.open_window(options, |window, cx| {
-        theme::apply_from_settings(Some(window), cx);
-
-        let view = cx.new(|cx| AppView::new(window, cx));
-
-        let appearance_obs = window.observe_window_appearance(|window, cx| {
-            theme::apply_from_settings(Some(window), cx);
-        });
-        view.update(cx, |v, _| v.set_appearance_obs(appearance_obs));
-
-        cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
-    });
+    let opened = cx.open_window(options, build_root);
 
     match opened {
         Ok(handle) => {

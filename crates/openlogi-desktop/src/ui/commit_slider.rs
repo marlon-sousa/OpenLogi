@@ -4,14 +4,18 @@
 //! often than a device or `config.toml` should be written. So a panel shows
 //! the live value while the thumb moves, commits once on release, and re-seats
 //! the thumb when the committed value changes underneath it — never mid-drag.
-//! [`CommitSlider`] is that behaviour and the state it needs; the panel still
-//! renders the stock `Slider` from [`CommitSlider::slider`].
+//! [`CommitSlider`] is that behaviour and the state it needs, and it renders
+//! the one accessible slider element, [`CommitSlider::control`].
 
 use std::cell::Cell;
 use std::rc::Rc;
 
-use gpui::{App, AppContext as _, Context, Entity, Subscription, Window};
-use gpui_component::slider::{SliderEvent, SliderState};
+use gpui::{
+    AccessibleAction, App, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement,
+    ParentElement as _, RenderOnce, Role, SharedString, StatefulInteractiveElement, Styled as _,
+    Subscription, Window, div, prelude::FluentBuilder as _,
+};
+use gpui_component::slider::{Slider, SliderEvent, SliderState, SliderValue};
 use openlogi_core::config::{ThumbwheelSensitivity, VerticalScrollSensitivity};
 use openlogi_core::hid::{Dpi, SmartShiftThreshold};
 
@@ -249,7 +253,13 @@ impl<T: SliderUnit> CommitSlider<T> {
         }
     }
 
-    /// The state to render a `Slider` from.
+    /// The slider element, named `label` for assistive technology.
+    pub(crate) fn control(&self, label: impl Into<SharedString>) -> SliderControl {
+        SliderControl::new(self.state.clone(), label)
+    }
+
+    /// The state, for a view that must hand a `'static` handle to a builder;
+    /// render it only through [`SliderControl::new`].
     pub(crate) fn slider(&self) -> &Entity<SliderState> {
         &self.state
     }
@@ -299,6 +309,143 @@ impl<T: SliderUnit> CommitSlider<T> {
         self.state.update(cx, |state, cx| {
             state.set_value(value.to_slider(), window, cx);
         });
+    }
+}
+
+/// A [`CommitSlider`] as a keyboard- and screen-reader-operable control.
+///
+/// The stock `Slider` has a slider role but no name and no focus: Tab skips
+/// it and a screen reader reads an anonymous number. So the control is this
+/// focusable wrapper — named, carrying the value range, stepping on the arrow,
+/// Page and Home/End keys and on the adapter's Increment/Decrement — around
+/// the stock slider, which stays the pointer surface. A keyboard step commits
+/// like a pointer release: it is one deliberate change, not a drag frame.
+///
+/// Until `gpui_base::Slider` takes a label, the inner slider remains a second,
+/// unnamed and unfocusable slider node in the tree.
+#[derive(IntoElement)]
+pub(crate) struct SliderControl {
+    state: Entity<SliderState>,
+    label: SharedString,
+    value_text: Option<SharedString>,
+}
+
+impl SliderControl {
+    /// The control over `state`, which a [`CommitSlider`] created.
+    pub(crate) fn new(state: Entity<SliderState>, label: impl Into<SharedString>) -> Self {
+        Self {
+            state,
+            label: label.into(),
+            value_text: None,
+        }
+    }
+
+    /// The value as a person would say it ("800 DPI", "40 %"); the bare
+    /// number is announced otherwise.
+    #[must_use]
+    pub(crate) fn value_text(mut self, text: impl Into<SharedString>) -> Self {
+        self.value_text = Some(text.into());
+        self
+    }
+}
+
+/// Where a key moves a slider, from its current value and bounds.
+fn keyboard_step(key: &str, value: f32, min: f32, max: f32, step: f32) -> Option<f32> {
+    let page = (step * 10.).max((max - min) / 10.);
+    let next = match key {
+        "right" | "up" => value + step,
+        "left" | "down" => value - step,
+        "pageup" => value + page,
+        "pagedown" => value - page,
+        "home" => min,
+        "end" => max,
+        _ => return None,
+    };
+    Some(((next / step).round() * step).clamp(min, max))
+}
+
+/// Move `state` to `value` and report it as a release, so a
+/// [`CommitSlider`] commits it.
+fn step_to(state: &Entity<SliderState>, value: f32, window: &mut Window, cx: &mut App) {
+    state.update(cx, |state, cx| {
+        if (state.value().start() - value).abs() > f32::EPSILON {
+            state.set_value(value, window, cx);
+            cx.emit(SliderEvent::Release(SliderValue::Single(value)));
+        }
+    });
+}
+
+impl RenderOnce for SliderControl {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let entity_id = self.state.entity_id();
+        let focus = window
+            .use_keyed_state(("slider-control-focus", entity_id), cx, |_, cx| {
+                cx.focus_handle()
+            })
+            .read(cx)
+            .clone();
+        let (value, min, max, step) = {
+            let state = self.state.read(cx);
+            (
+                state.value().start(),
+                state.min_value(),
+                state.max_value(),
+                state.step_value(),
+            )
+        };
+        let key_state = self.state.clone();
+        let increment = self.state.clone();
+        let decrement = self.state.clone();
+        let accent = gpui::rgb(super::theme::ACCENT_BLUE);
+        div()
+            .id(("slider-control", entity_id))
+            .track_focus(&focus)
+            .role(Role::Slider)
+            .aria_label(self.label)
+            .aria_numeric_value(f64::from(value))
+            .aria_min_numeric_value(f64::from(min))
+            .aria_max_numeric_value(f64::from(max))
+            .aria_numeric_value_step(f64::from(step))
+            .aria_orientation(gpui::Orientation::Horizontal)
+            .when_some(self.value_text, StatefulInteractiveElement::aria_value)
+            .w_full()
+            .rounded_sm()
+            .border_1()
+            .border_color(gpui::transparent_black())
+            .focus_visible(move |style| style.border_color(accent))
+            .on_key_down(move |event, window, cx| {
+                let (value, min, max, step) = {
+                    let state = key_state.read(cx);
+                    (
+                        state.value().start(),
+                        state.min_value(),
+                        state.max_value(),
+                        state.step_value(),
+                    )
+                };
+                if event.keystroke.modifiers.modified() {
+                    return;
+                }
+                if let Some(next) = keyboard_step(&event.keystroke.key, value, min, max, step) {
+                    cx.stop_propagation();
+                    step_to(&key_state, next, window, cx);
+                }
+            })
+            .on_a11y_action(AccessibleAction::Increment, move |_, window, cx| {
+                let (value, max, step) = {
+                    let state = increment.read(cx);
+                    (state.value().start(), state.max_value(), state.step_value())
+                };
+                step_to(&increment, (value + step).min(max), window, cx);
+            })
+            .on_a11y_action(AccessibleAction::Decrement, move |_, window, cx| {
+                let (value, min, step) = {
+                    let state = decrement.read(cx);
+                    (state.value().start(), state.min_value(), state.step_value())
+                };
+                step_to(&decrement, (value - step).max(min), window, cx);
+            })
+            .child(Slider::new(&self.state).horizontal())
     }
 }
 

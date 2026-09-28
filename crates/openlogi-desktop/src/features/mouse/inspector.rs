@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use gpui::{
-    Context, Entity, InteractiveElement, IntoElement, ParentElement, Role,
+    Context, Entity, FocusHandle, InteractiveElement, IntoElement, ParentElement, Role,
     StatefulInteractiveElement as _, Styled, div, prelude::FluentBuilder as _, px, rgb, svg,
 };
 use gpui_base::Button as BaseButton;
@@ -45,10 +45,23 @@ struct ActionPickerContext<'a> {
     open: bool,
     search: &'a Entity<InputState>,
     view: &'a Entity<MouseModelView>,
+    handles: InspectorHandles<'a>,
+}
+
+/// Where the inspector puts focus: [`landing`](Self::landing) on the control
+/// that says what the selection does now (the selected gesture direction, or
+/// the current-action card), [`choice`](Self::choice) on the open picker's
+/// current choice. The view moves focus to them; the inspector only decides
+/// which element carries each.
+#[derive(Clone, Copy)]
+pub(super) struct InspectorHandles<'a> {
+    pub landing: &'a FocusHandle,
+    pub choice: &'a FocusHandle,
 }
 
 pub(super) fn binding_inspector(
     data: BindingInspectorData<'_>,
+    handles: InspectorHandles<'_>,
     action_search: &Entity<InputState>,
     view: &Entity<MouseModelView>,
     cx: &Context<MouseModelView>,
@@ -58,6 +71,7 @@ pub(super) fn binding_inspector(
         open: data.action_picker_open,
         search: action_search,
         view,
+        handles,
     };
     let body = match data.selected {
         None => empty_inspector(
@@ -175,7 +189,7 @@ fn button_inspector(
             Some(status),
             pal,
         ))
-        .child(current_action_card(&action, picker, pal))
+        .child(current_action_card(&action, true, picker, pal))
         .when(overridden, |panel| {
             let observer = picker.view.clone();
             panel.child(
@@ -224,6 +238,7 @@ fn button_inspector(
                 "inspector-action",
                 Some(&action),
                 picker.search,
+                picker.handles.choice,
                 &on_pick,
                 pal,
                 cx,
@@ -277,6 +292,7 @@ fn inherited_gesture_inspector(
                 "inspector-gesture-override",
                 None,
                 picker.search,
+                picker.handles.choice,
                 &on_pick,
                 pal,
                 cx,
@@ -318,9 +334,10 @@ fn gesture_inspector(
             gesture_map,
             button,
             picker.view,
+            picker.handles.landing,
             pal,
         ))
-        .child(current_action_card(&current, picker, pal))
+        .child(current_action_card(&current, false, picker, pal))
         .child(
             control_button("inspector-single-action")
                 .w_full()
@@ -338,6 +355,7 @@ fn gesture_inspector(
                 "inspector-gesture-action",
                 Some(&current),
                 picker.search,
+                picker.handles.choice,
                 &on_pick,
                 pal,
                 cx,
@@ -350,6 +368,7 @@ fn gesture_directions(
     gesture_map: &BTreeMap<GestureDirection, Action>,
     button: ButtonId,
     view: &Entity<MouseModelView>,
+    landing: &FocusHandle,
     pal: Palette,
 ) -> impl IntoElement {
     v_flex()
@@ -363,9 +382,15 @@ fn gesture_directions(
                     let selected = direction == active;
                     let action = gesture_action(gesture_map, button, direction);
                     let view = view.clone();
-                    MenuRow::new(("inspector-direction", index))
+                    let row_label = tr!(
+                        "common.name_value",
+                        name => tr!(direction.translation_key()),
+                        value => localized_action_label(&action)
+                    );
+                    MenuRow::new(("inspector-direction", index), row_label)
                         .selected(selected)
-                        .role(Role::Button)
+                        .role(Role::MenuItemRadio)
+                        .when(selected, |row| row.track_focus(landing))
                         .child(
                             h_flex()
                                 .min_w_0()
@@ -460,6 +485,7 @@ fn thumbwheel_inspector(
             tr!("common.preset"),
             current_icon,
             current_label,
+            true,
             picker,
             pal,
         ))
@@ -470,39 +496,15 @@ fn thumbwheel_inspector(
                     .child(editor_section(tr!("common.preset"), pal))
                     .children(ThumbwheelPreset::ALL.into_iter().enumerate().map(
                         |(index, preset)| {
-                            let selected = current == Some(preset);
-                            let observer = observer.clone();
-                            MenuRow::new(("inspector-thumbwheel", index))
-                                .selected(selected)
-                                .role(Role::Button)
-                                .child(
-                                    h_flex()
-                                        .items_center()
-                                        .gap_2()
-                                        .child(
-                                            svg()
-                                                .path(preset.icon())
-                                                .size_4()
-                                                .text_color(pal.text_muted),
-                                        )
-                                        .child(div().child(tr!(preset.translation_key()))),
-                                )
-                                .when(selected, |row| {
-                                    row.child(
-                                        Icon::new(IconName::Check)
-                                            .size_3()
-                                            .text_color(rgb(ACCENT_BLUE)),
-                                    )
-                                })
-                                .on_click(move |_, _, cx| {
-                                    AppState::apply(cx, |state| {
-                                        state.commit_thumbwheel_preset(preset)
-                                    });
-                                    observer.update(cx, |view, cx| {
-                                        view.close_action_picker();
-                                        cx.notify();
-                                    });
-                                })
+                            thumbwheel_preset_row(
+                                index,
+                                preset,
+                                current == Some(preset),
+                                (current == Some(preset) || (current.is_none() && index == 0))
+                                    .then_some(picker.handles.choice),
+                                observer.clone(),
+                                pal,
+                            )
                         },
                     )),
             )
@@ -526,6 +528,50 @@ fn thumbwheel_inspector(
         })
 }
 
+/// One thumb-wheel preset choice; picking it commits and closes the picker.
+fn thumbwheel_preset_row(
+    index: usize,
+    preset: ThumbwheelPreset,
+    selected: bool,
+    landing: Option<&FocusHandle>,
+    observer: Entity<MouseModelView>,
+    pal: Palette,
+) -> MenuRow {
+    MenuRow::new(
+        ("inspector-thumbwheel", index),
+        tr!(preset.translation_key()),
+    )
+    .selected(selected)
+    .role(Role::MenuItemRadio)
+    .when_some(landing, MenuRow::track_focus)
+    .child(
+        h_flex()
+            .items_center()
+            .gap_2()
+            .child(
+                svg()
+                    .path(preset.icon())
+                    .size_4()
+                    .text_color(pal.text_muted),
+            )
+            .child(div().child(tr!(preset.translation_key()))),
+    )
+    .when(selected, |row| {
+        row.child(
+            Icon::new(IconName::Check)
+                .size_3()
+                .text_color(rgb(ACCENT_BLUE)),
+        )
+    })
+    .on_click(move |_, _, cx| {
+        AppState::apply(cx, |state| state.commit_thumbwheel_preset(preset));
+        observer.update(cx, |view, cx| {
+            view.close_action_picker();
+            cx.notify();
+        });
+    })
+}
+
 fn inspector_heading(
     title: gpui::SharedString,
     status: Option<gpui::SharedString>,
@@ -544,6 +590,7 @@ fn inspector_heading(
 
 fn current_action_card(
     action: &Action,
+    landing: bool,
     picker: ActionPickerContext<'_>,
     pal: Palette,
 ) -> impl IntoElement {
@@ -552,6 +599,7 @@ fn current_action_card(
         tr!("actions.current_action"),
         action_icon_path(action),
         localized_action_label(action),
+        landing,
         picker,
         pal,
     )
@@ -563,6 +611,7 @@ fn gesture_summary_card(picker: ActionPickerContext<'_>, pal: Palette) -> impl I
         tr!("actions.current_action"),
         GESTURE_BUTTON_ICON,
         tr!("actions.five_directions"),
+        true,
         picker,
         pal,
     )
@@ -573,15 +622,22 @@ fn selection_card(
     caption: gpui::SharedString,
     icon: &'static str,
     value: gpui::SharedString,
+    landing: bool,
     picker: ActionPickerContext<'_>,
     pal: Palette,
 ) -> impl IntoElement {
     let toggle = picker.view.clone();
     let search = picker.search.clone();
     let opening = !picker.open;
-    let accessible_label = value.clone();
-    BaseButton::new(id)
-        .accessibility_label(accessible_label)
+    let accessible_label =
+        tr!("common.name_value", name => caption.clone(), value => value.clone());
+    let base = BaseButton::new(id);
+    let base = if landing {
+        base.track_focus(picker.handles.landing)
+    } else {
+        base
+    };
+    base.accessibility_label(accessible_label)
         .aria_expanded(picker.open)
         .flex()
         .flex_col()
@@ -647,17 +703,18 @@ fn action_library(
     id_prefix: &'static str,
     current: Option<&Action>,
     action_search: &Entity<InputState>,
+    choice: &FocusHandle,
     on_pick: &PickFn,
     pal: Palette,
     cx: &Context<MouseModelView>,
 ) -> impl IntoElement {
     let query = action_search.read(cx).value();
-    let rows = action_rows_matching(id_prefix, current, &query, on_pick, pal);
+    let rows = action_rows_matching(id_prefix, current, &query, on_pick, pal, Some(choice));
     v_flex()
         .gap_2()
         .pt_1()
         .child(editor_section(tr!("actions.actions"), pal))
-        .child(control_input(action_search).cleanable(true))
+        .child(control_input(action_search, tr!("actions.search_actions_label")).cleanable(true))
         .child(
             v_flex()
                 .gap_0p5()

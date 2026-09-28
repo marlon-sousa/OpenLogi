@@ -50,6 +50,10 @@ preset = "Préréglage"
 remove_named_item = "Supprimer %{name}"
 enable = "Activer"
 not_now = "Pas maintenant"
+name_value = "%{name}: %{value}"
+previous = "Previous"
+next = "Next"
+name_with_detail = "%{name} (%{detail})"
 
 [app]
 open_openlogi = "Ouvrir OpenLogi"
@@ -131,6 +135,11 @@ quit_logi_options_hid_access = "Vous utilisez Logi Options+ ? Quittez-le d’abo
 device = "Appareil"
 manage_this_device = "Gérer cet appareil"
 usb = "USB"
+device_sections = "Device sections"
+device_name = "Device name"
+previous_device = "Previous device"
+next_device = "Next device"
+device_options = "Device options for %{name}"
 
 [profiles]
 remove_all_profiles = "Delete all app settings"
@@ -179,6 +188,7 @@ remove_profile = "Supprimer le profil"
 remove_profile_dialog = "Supprimer le profil…"
 select_device_button_description = "Sélectionnez un bouton de l’appareil pour modifier son action."
 remove_profile_description = "Les affectations personnalisées de ce profil seront supprimées. Celles par défaut ne seront pas modifiées."
+search_applications_label = "Search applications"
 
 [pointer]
 mouse_button_profiles = "Profils des boutons de souris"
@@ -249,6 +259,9 @@ high_resolution_scrolling_description = "Détecte les mouvements plus fins entre
 wheel_resolution_unsupported = "Cet appareil ne prend pas en charge le réglage de la résolution de la molette."
 wheel_resolution_other_connection = "L’appareil prend en charge la résolution de molette avec son autre connexion, mais pas celle-ci."
 smartshift = "SmartShift"
+dpi_value = "%{value} DPI"
+remove_dpi_preset = "Remove %{value} DPI preset"
+add_current_dpi_preset = "Add current DPI as preset"
 
 [actions]
 bind_control = "Attribuer %{name}"
@@ -337,6 +350,7 @@ type_text_action = "Saisir « %{text} »"
 workflow_step_count_singular = "Flux de travail (1 étape)"
 workflow_step_count_plural = "Flux de travail (%{count} étapes)"
 open_named_target = "Ouvrir %{name}"
+search_actions_label = "Search actions"
 
 [pairing]
 add_device = "Ajouter un appareil"
@@ -491,6 +505,7 @@ color_theme = "Thème de couleurs"
 app_icon = "Icône de l’app"
 app_icon_description = "Choisissez l’icône qu’OpenLogi affiche dans le Dock, le Finder et le Launchpad."
 interface_language = "Langue de l’interface"
+search_themes = "Search themes"
 
 [diagnostics]
 diagnostics = "Diagnostics"
@@ -524,12 +539,24 @@ image = "Image"
 streaming = "Diffusion"
 video_call = "Appel vidéo"
 camera_preview_platform_unavailable = "L’aperçu en direct n’est pas encore disponible sur cette plateforme."
+auto_control = "Auto %{control}"
 
 [lighting]
 colour_temperature = "Température de couleur"
 applying_light_setting = "Application du réglage d’éclairage…"
 auto_on_with_camera = "Allumage automatique avec la caméra"
 camera_light_auto_description = "Allume l’éclairage lorsqu’une caméra est utilisée et l’éteint lorsqu’aucune ne l’est."
+power = "Power"
+color = "Couleur"
+color_red = "Red"
+color_orange = "Orange"
+color_yellow = "Yellow"
+color_green = "Green"
+color_teal = "Teal"
+color_blue = "Blue"
+color_indigo = "Indigo"
+color_purple = "Purple"
+color_white = "White"
 
 [action_ring]
 actions_ring = "Anneau d’actions"
@@ -560,6 +587,16 @@ custom_shortcut = "Raccourci personnalisé"
 shortcut_e_g_cmd_plus_shift_plus_p = "Raccourci, p. ex. Cmd+Shift+P"
 application_folder_path_or_url = "Application, chemin de dossier ou URL"
 open_application_or_folder = "Ouvrir une application ou un dossier"
+add_shortcut = "Add shortcut"
+add_application = "Add application"
+slot_top = "Top"
+slot_top_right = "Top right"
+slot_right = "Right"
+slot_bottom_right = "Bottom right"
+slot_bottom = "Bottom"
+slot_bottom_left = "Bottom left"
+slot_left = "Left"
+slot_top_left = "Top left"
 
 [keyboard]
 editor_unavailable = "Éditeur indisponible"
@@ -573,3 +610,4 @@ play_pause_key = "Touche Lecture/Pause"
 mute_key = "Touche Muet"
 volume_down_key = "Touche Baisser le volume"
 volume_up_key = "Touche Augmenter le volume"
+remove_workflow_step = "Remove step %{number}: %{step}"

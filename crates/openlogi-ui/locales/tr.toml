@@ -50,6 +50,10 @@ preset = "Ön ayar"
 remove_named_item = "%{name} öğesini kaldır"
 enable = "Etkinleştir"
 not_now = "Şimdi değil"
+name_value = "%{name}: %{value}"
+previous = "Previous"
+next = "Next"
+name_with_detail = "%{name} (%{detail})"
 
 [app]
 open_openlogi = "OpenLogi'yi aç"
@@ -131,6 +135,11 @@ quit_logi_options_hid_access = "Logi Options+ kullanıyor musunuz? Önce ondan �
 device = "Cihaz"
 manage_this_device = "Bu cihazı yönet"
 usb = "USB"
+device_sections = "Device sections"
+device_name = "Device name"
+previous_device = "Previous device"
+next_device = "Next device"
+device_options = "Device options for %{name}"
 
 [profiles]
 remove_all_profiles = "Delete all app settings"
@@ -179,6 +188,7 @@ remove_profile = "Profili kaldır"
 remove_profile_dialog = "Profili kaldır…"
 select_device_button_description = "Ne yapacağını değiştirmek için cihaz üzerinde bir düğme seçin."
 remove_profile_description = "Bu, profildeki özel düğme atamalarını siler. Varsayılan atamalar etkilenmez."
+search_applications_label = "Search applications"
 
 [pointer]
 mouse_button_profiles = "Fare düğmesi profilleri"
@@ -249,6 +259,9 @@ high_resolution_scrolling_description = "Kademeler arasındaki daha ince hareket
 wheel_resolution_unsupported = "Bu cihaz tekerlek çözünürlüğü denetimini desteklemiyor."
 wheel_resolution_other_connection = "Bu cihaz diğer bağlantısında tekerlek çözünürlüğünü destekliyor, ancak bu bağlantıda desteklemiyor."
 smartshift = "SmartShift"
+dpi_value = "%{value} DPI"
+remove_dpi_preset = "Remove %{value} DPI preset"
+add_current_dpi_preset = "Add current DPI as preset"
 
 [actions]
 bind_control = "%{name} ata"
@@ -337,6 +350,7 @@ type_text_action = "“%{text}” yaz"
 workflow_step_count_singular = "İş akışı (1 adım)"
 workflow_step_count_plural = "İş akışı (%{count} adım)"
 open_named_target = "%{name} öğesini aç"
+search_actions_label = "Search actions"
 
 [pairing]
 add_device = "Cihaz Ekle"
@@ -491,6 +505,7 @@ color_theme = "Renk teması"
 app_icon = "Uygulama simgesi"
 app_icon_description = "OpenLogi'nin Dock, Finder ve Launchpad'de kullanacağı simgeyi seçin."
 interface_language = "Arayüz dili"
+search_themes = "Search themes"
 
 [diagnostics]
 diagnostics = "Tanılama"
@@ -524,12 +539,24 @@ image = "Görüntü"
 streaming = "Yayın"
 video_call = "Görüntülü görüşme"
 camera_preview_platform_unavailable = "Canlı önizleme bu platformda henüz kullanılamıyor."
+auto_control = "Auto %{control}"
 
 [lighting]
 colour_temperature = "Renk sıcaklığı"
 applying_light_setting = "Işık ayarı uygulanıyor…"
 auto_on_with_camera = "Kamerayla otomatik aç"
 camera_light_auto_description = "Herhangi bir kamera kullanılırken bu ışığı aç, kameralar durunca kapat."
+power = "Power"
+color = "Renk"
+color_red = "Red"
+color_orange = "Orange"
+color_yellow = "Yellow"
+color_green = "Green"
+color_teal = "Teal"
+color_blue = "Blue"
+color_indigo = "Indigo"
+color_purple = "Purple"
+color_white = "White"
 
 [action_ring]
 actions_ring = "Eylem Halkası"
@@ -560,6 +587,16 @@ custom_shortcut = "Özel kısayol"
 shortcut_e_g_cmd_plus_shift_plus_p = "Kısayol, örn. Cmd+Shift+P"
 application_folder_path_or_url = "Uygulama, klasör yolu veya URL"
 open_application_or_folder = "Uygulama veya klasör aç"
+add_shortcut = "Add shortcut"
+add_application = "Add application"
+slot_top = "Top"
+slot_top_right = "Top right"
+slot_right = "Right"
+slot_bottom_right = "Bottom right"
+slot_bottom = "Bottom"
+slot_bottom_left = "Bottom left"
+slot_left = "Left"
+slot_top_left = "Top left"
 
 [keyboard]
 editor_unavailable = "Düzenleyici kullanılamıyor"
@@ -573,3 +610,4 @@ play_pause_key = "Oynat/duraklat tuşu"
 mute_key = "Sessize alma tuşu"
 volume_down_key = "Sesi azaltma tuşu"
 volume_up_key = "Sesi artırma tuşu"
+remove_workflow_step = "Remove step %{number}: %{step}"

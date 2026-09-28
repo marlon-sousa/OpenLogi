@@ -6,22 +6,19 @@
 //! exposes exact device-supported values once the list is known.
 
 use gpui::{
-    AnyElement, Context, Entity, IntoElement, ParentElement, Render, Styled, Subscription, Window,
-    div, px,
+    AnyElement, Context, IntoElement, ParentElement, Render, Styled, Subscription, Window, div, px,
 };
 use gpui_component::{
     Icon, IconName, Selectable as _, Sizable as _,
     button::{Button, ButtonVariants as _},
-    h_flex,
-    slider::{Slider, SliderState},
-    v_flex,
+    h_flex, v_flex,
 };
 use openlogi_core::hid::{Dpi, DpiCapabilities};
 use tracing::debug;
 
 use crate::state::{AppState, DeviceKey, DpiLoad, StateEvent};
-use crate::ui::commit_slider::{CommitSlider, SliderRange};
-use crate::ui::components::PresetChip;
+use crate::ui::commit_slider::{CommitSlider, SliderControl, SliderRange};
+use crate::ui::components::{PresetChip, icon_button};
 use crate::ui::status::{retry_line, status_line};
 use crate::ui::theme::{self, Palette, Typography as _};
 
@@ -167,7 +164,9 @@ impl Render for DpiPanel {
         let range_label = dpi_range_label(&snapshot.status, snapshot.reachable);
         let slider = slider_element(
             &snapshot.status,
-            self.slider.as_ref().map(|current| current.slider.slider()),
+            self.slider
+                .as_ref()
+                .map(|current| current.slider.control(tr!("pointer.dpi"))),
             snapshot.reachable,
             snapshot.device_key.clone(),
             pal,
@@ -271,12 +270,12 @@ fn dpi_range_label(status: &DpiLoad, reachable: bool) -> AnyElement {
 
 fn slider_element(
     status: &DpiLoad,
-    slider_state: Option<&Entity<SliderState>>,
+    slider: Option<SliderControl>,
     reachable: bool,
     key: Option<DeviceKey>,
     pal: Palette,
 ) -> AnyElement {
-    match (status, slider_state) {
+    match (status, slider) {
         // A device with one supported DPI has nothing to drag — show the value.
         (DpiLoad::Ready(info), _) if info.capabilities.min() == info.capabilities.max() => {
             status_line(
@@ -285,9 +284,7 @@ fn slider_element(
             )
             .into_any_element()
         }
-        (DpiLoad::Ready(_), Some(slider_state)) => {
-            Slider::new(slider_state).horizontal().into_any_element()
-        }
+        (DpiLoad::Ready(_), Some(slider)) => slider.into_any_element(),
         (DpiLoad::Ready(_), None) => {
             status_line(tr!("pointer.preparing_dpi_slider"), pal).into_any_element()
         }
@@ -332,6 +329,7 @@ fn preset_chip(idx: usize, value: Dpi, active: bool, presets: &[Dpi]) -> impl In
                 .flex()
                 .items_center()
                 .label(format!("{value}"))
+                .accessibility_label(tr!("pointer.dpi_value", value => value))
                 .selected(active)
                 .on_click(move |_event, _window, cx| {
                     // Only apply once the supported DPI list is known, so the
@@ -346,17 +344,20 @@ fn preset_chip(idx: usize, value: Dpi, active: bool, presets: &[Dpi]) -> impl In
                 }),
         )
         .child(
-            Button::new(("dpi-preset-remove", idx))
-                .xsmall()
-                .ghost()
-                .icon(IconName::Close)
-                .on_click(move |_event, _window, cx| {
-                    let mut next = presets_for_remove.clone();
-                    if idx < next.len() {
-                        next.remove(idx);
-                    }
-                    AppState::apply(cx, |state| state.commit_dpi_presets(next));
-                }),
+            icon_button(
+                ("dpi-preset-remove", idx),
+                IconName::Close,
+                tr!("pointer.remove_dpi_preset", value => value),
+            )
+            .xsmall()
+            .ghost()
+            .on_click(move |_event, _window, cx| {
+                let mut next = presets_for_remove.clone();
+                if idx < next.len() {
+                    next.remove(idx);
+                }
+                AppState::apply(cx, |state| state.commit_dpi_presets(next));
+            }),
         )
 }
 
@@ -368,6 +369,7 @@ fn add_preset_chip() -> impl IntoElement {
         .h(px(CHIP_H))
         .icon(IconName::Plus)
         .label(tr!("common.add"))
+        .accessibility_label(tr!("pointer.add_current_dpi_preset"))
         .on_click(|_event, _window, cx| {
             // Append the current DPI to the active device's preset list.
             // Duplicates are allowed — the user might want the same value

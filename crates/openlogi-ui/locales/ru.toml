@@ -50,6 +50,10 @@ preset = "Пресет"
 remove_named_item = "Удалить %{name}"
 enable = "Включить"
 not_now = "Не сейчас"
+name_value = "%{name}: %{value}"
+previous = "Previous"
+next = "Next"
+name_with_detail = "%{name} (%{detail})"
 
 [app]
 open_openlogi = "Открыть OpenLogi"
@@ -131,6 +135,11 @@ quit_logi_options_hid_access = "Используете Logi Options+? Снача
 device = "Устройство"
 manage_this_device = "Управлять устройством"
 usb = "USB"
+device_sections = "Device sections"
+device_name = "Device name"
+previous_device = "Previous device"
+next_device = "Next device"
+device_options = "Device options for %{name}"
 
 [profiles]
 remove_all_profiles = "Delete all app settings"
@@ -179,6 +188,7 @@ remove_profile = "Удалить профиль"
 remove_profile_dialog = "Удалить профиль…"
 select_device_button_description = "Выберите кнопку на устройстве, чтобы изменить её действие."
 remove_profile_description = "Пользовательские привязки кнопок в этом профиле будут удалены. Стандартные привязки не изменятся."
+search_applications_label = "Search applications"
 
 [pointer]
 mouse_button_profiles = "Профили кнопок мыши"
@@ -249,6 +259,9 @@ high_resolution_scrolling_description = "Обнаруживает более м�
 wheel_resolution_unsupported = "Это устройство не поддерживает управление разрешением колеса."
 wheel_resolution_other_connection = "Устройство поддерживает настройку разрешения колеса при другом типе подключения, но не при текущем."
 smartshift = "SmartShift"
+dpi_value = "%{value} DPI"
+remove_dpi_preset = "Remove %{value} DPI preset"
+add_current_dpi_preset = "Add current DPI as preset"
 
 [actions]
 bind_control = "Назначить %{name}"
@@ -337,6 +350,7 @@ type_text_action = "Ввести «%{text}»"
 workflow_step_count_singular = "Сценарий (1 шаг)"
 workflow_step_count_plural = "Сценарий (шагов: %{count})"
 open_named_target = "Открыть %{name}"
+search_actions_label = "Search actions"
 
 [pairing]
 add_device = "Добавить устройство"
@@ -491,6 +505,7 @@ color_theme = "Цветовая тема"
 app_icon = "Значок приложения"
 app_icon_description = "Выберите значок, который OpenLogi показывает в Dock, Finder и Launchpad."
 interface_language = "Язык интерфейса"
+search_themes = "Search themes"
 
 [diagnostics]
 diagnostics = "Диагностика"
@@ -524,12 +539,24 @@ image = "Изображение"
 streaming = "Стриминг"
 video_call = "Видеозвонок"
 camera_preview_platform_unavailable = "Предпросмотр в реальном времени пока недоступен на этой платформе."
+auto_control = "Auto %{control}"
 
 [lighting]
 colour_temperature = "Цветовая температура"
 applying_light_setting = "Применение настройки освещения…"
 auto_on_with_camera = "Автовключение с камерой"
 camera_light_auto_description = "Включать свет при использовании любой камеры и выключать, когда камеры неактивны."
+power = "Power"
+color = "Цвет"
+color_red = "Red"
+color_orange = "Orange"
+color_yellow = "Yellow"
+color_green = "Green"
+color_teal = "Teal"
+color_blue = "Blue"
+color_indigo = "Indigo"
+color_purple = "Purple"
+color_white = "White"
 
 [action_ring]
 actions_ring = "Кольцо действий"
@@ -560,6 +587,16 @@ custom_shortcut = "Пользовательское сочетание клав�
 shortcut_e_g_cmd_plus_shift_plus_p = "Сочетание, например Cmd+Shift+P"
 application_folder_path_or_url = "Приложение, путь к папке или URL"
 open_application_or_folder = "Открыть приложение или папку"
+add_shortcut = "Add shortcut"
+add_application = "Add application"
+slot_top = "Top"
+slot_top_right = "Top right"
+slot_right = "Right"
+slot_bottom_right = "Bottom right"
+slot_bottom = "Bottom"
+slot_bottom_left = "Bottom left"
+slot_left = "Left"
+slot_top_left = "Top left"
 
 [keyboard]
 editor_unavailable = "Редактор недоступен"
@@ -573,3 +610,4 @@ play_pause_key = "Клавиша воспроизведения и паузы"
 mute_key = "Клавиша отключения звука"
 volume_down_key = "Клавиша уменьшения громкости"
 volume_up_key = "Клавиша увеличения громкости"
+remove_workflow_step = "Remove step %{number}: %{step}"

@@ -17,7 +17,7 @@ use super::action_icons::action_icon_path;
 use crate::features::binding_editor::editor_section;
 use crate::state::AppState;
 use crate::ui::action::localized_action_label;
-use crate::ui::components::{MenuRow, control_input};
+use crate::ui::components::{MenuRow, control_group, control_input};
 use crate::ui::theme::{self, Palette, Typography as _};
 
 pub(super) fn action_library(
@@ -34,6 +34,11 @@ pub(super) fn action_library(
         .map_or_else(|| tr!("action_ring.empty_slot"), localized_action_label);
 
     v_flex()
+        .id("ring-slot-editor")
+        // Named for the slot, so a screen reader entering the editor hears
+        // which slot "Clear slot" and the choices below act on.
+        .role(Role::Group)
+        .aria_label(super::slot_position_label(slot))
         .flex_1()
         .min_w(px(280.0))
         .max_w(px(320.0))
@@ -123,21 +128,26 @@ fn icon_editor(
         .gap_1()
         .child(editor_section(tr!("action_ring.icon"), pal))
         .child(
-            h_flex().flex_wrap().gap_1().child(default).children(
-                ActionRingIcon::ALL
-                    .into_iter()
-                    .enumerate()
-                    .map(move |(index, icon)| {
-                        icon_button(
-                            ("ring-custom-icon", index),
-                            icon.asset_path(),
-                            rust_i18n::t!(icon.translation_key()),
-                            current == Some(icon),
-                            pal,
-                        )
-                        .on_click(move |_, _, cx| commit_icon(slot, Some(icon), cx))
-                    }),
-            ),
+            control_group("ring-icon-choices", tr!("action_ring.icon"))
+                .flex()
+                .flex_wrap()
+                .gap_1()
+                .child(default)
+                .children(
+                    ActionRingIcon::ALL
+                        .into_iter()
+                        .enumerate()
+                        .map(move |(index, icon)| {
+                            icon_button(
+                                ("ring-custom-icon", index),
+                                icon.asset_path(),
+                                rust_i18n::t!(icon.translation_key()),
+                                current == Some(icon),
+                                pal,
+                            )
+                            .on_click(move |_, _, cx| commit_icon(slot, Some(icon), cx))
+                        }),
+                ),
         )
 }
 
@@ -148,12 +158,16 @@ fn icon_button(
     selected: bool,
     pal: Palette,
 ) -> Button {
-    Button::new(id)
+    crate::ui::components::choice_button(
+        crate::ui::components::icon_button(
+            id,
+            Icon::empty().path(path).text_color(pal.text_muted),
+            label,
+        )
         .size(px(32.0))
-        .rounded(px(16.0))
-        .selected(selected)
-        .icon(Icon::empty().path(path).text_color(pal.text_muted))
-        .tooltip(label)
+        .rounded(px(16.0)),
+        selected,
+    )
 }
 
 fn shortcut_editor(
@@ -168,16 +182,14 @@ fn shortcut_editor(
         .child(
             h_flex()
                 .gap_2()
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .child(control_input(input).cleanable(true)),
-                )
+                .child(div().flex_1().min_w_0().child(
+                    control_input(input, tr!("action_ring.custom_shortcut")).cleanable(true),
+                ))
                 .child(
                     Button::new("ring-add-shortcut")
                         .compact()
                         .label(tr!("common.add"))
+                        .accessibility_label(tr!("action_ring.add_shortcut"))
                         .on_click(move |_, _, cx| {
                             let shortcut = submit_input.read(cx).value().to_string();
                             if let Ok(combo) = shortcut.parse::<KeyCombo>() {
@@ -200,15 +212,16 @@ fn path_editor(slot: ActionRingSlot, input: &Entity<InputState>, pal: Palette) -
             h_flex()
                 .gap_2()
                 .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .child(control_input(input).cleanable(true)),
+                    div().flex_1().min_w_0().child(
+                        control_input(input, tr!("action_ring.open_application_or_folder"))
+                            .cleanable(true),
+                    ),
                 )
                 .child(
                     Button::new("ring-add-path")
                         .compact()
                         .label(tr!("common.add"))
+                        .accessibility_label(tr!("action_ring.add_application"))
                         .on_click(move |_, _, cx| {
                             let path = submit_input.read(cx).value().to_string();
                             if let Ok(target) = ApplicationTarget::new(path, "") {
@@ -238,9 +251,8 @@ fn action_sections(
                 let icon_path = action_icon_path(&action);
                 let row_index = index;
                 index += 1;
-                MenuRow::new(("ring-action", row_index))
-                    .role(Role::MenuItem)
-                    .aria_label(label.clone())
+                MenuRow::new(("ring-action", row_index), label.clone())
+                    .role(Role::MenuItemRadio)
                     .selected(selected)
                     .child(
                         h_flex()

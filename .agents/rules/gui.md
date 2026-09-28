@@ -38,6 +38,9 @@ paths:
   Adopt upstream improvements in these owners rather than patching each call site.
   Shared SVGs use `openlogi-ui/action-icons/` and its `ActionIcons` asset source;
   keep shared paths such as `RING_CANCEL_ICON` identical in the preview and overlay.
+- **Accessibility owners:** interactive elements come from `ui::components`, whose
+  constructors take the accessible name; screen and route changes move focus through
+  `ui::focus` (see `docs/DECISIONS.md`, 2026-09).
 - **Live language changes:** follow [i18n.md](i18n.md). Each localized binary generates
   its own backend for `openlogi-ui/locales/`. Use `localize_placeholder` for cached
   input placeholders and `StateEvent::LanguageChanged` for other cached text.

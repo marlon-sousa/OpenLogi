@@ -26,6 +26,7 @@ use crate::features::pointer::smartshift::SmartShiftPanel;
 use crate::features::profiles::{AppCatalogPicker, ProfileIconCache};
 use crate::services::assets::user_cache_root;
 use crate::state::{AgentLink, AppState, DeviceRecord, StateEvent, StateEvents};
+use crate::ui::focus::{FocusTargets, keep_focus};
 use crate::ui::theme::{self, ContentWidth, Typography as _};
 
 pub(crate) mod deeplink;
@@ -67,7 +68,7 @@ enum Route {
 /// lighting; every device gets the info tab. Tailoring the tabs is what keeps a
 /// keyboard from rendering a mouse silhouette and an irrelevant DPI panel
 /// (issue #19).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum DetailTab {
     /// The mouse model with clickable button hotspots.
     Buttons,
@@ -186,6 +187,11 @@ pub struct AppView {
     accessibility_dismissed: bool,
     /// Which section of the device-detail screen is showing.
     active_tab: DetailTab,
+    /// Landing targets: each Home device card by record key, and each section
+    /// tab of the device page. See [`crate::ui::focus`].
+    card_focus: FocusTargets<String>,
+    section_focus: FocusTargets<DetailTab>,
+    _keep_focus: Subscription,
 }
 
 impl Focusable for AppView {
@@ -280,6 +286,9 @@ impl AppView {
                 cx.notify();
             }
         });
+        let keep_focus_sub = keep_focus(window, cx, focus_handle.clone(), |this, _, cx| {
+            this.landing_target(cx)
+        });
         Self {
             focus_handle,
             route: Route::Home,
@@ -300,6 +309,9 @@ impl AppView {
             config_issue_visible: false,
             accessibility_dismissed: false,
             active_tab: DetailTab::Buttons,
+            card_focus: FocusTargets::default(),
+            section_focus: FocusTargets::default(),
+            _keep_focus: keep_focus_sub,
         }
     }
 
@@ -308,34 +320,105 @@ impl AppView {
         self.appearance_obs = Some(sub);
     }
 
-    /// Drill into a device's settings from the gallery. Makes it the
-    /// functionally active device too (hook bindings, DPI, and the persisted
-    /// selection follow [`AppState::select_device`]) and switches the
-    /// route to its detail screen.
-    fn open_device(&mut self, record_key: String, cx: &mut Context<Self>) {
-        AppState::apply(cx, |state| {
-            state
-                .devices()
-                .iter()
-                .position(|record| record.record_key() == record_key)
-                .map_or_else(StateEvents::none, |idx| state.select_device(idx))
-        });
-        AppState::load_current_device_reads(cx);
-        self.route = Route::Device { record_key };
-        // Land on the device's first relevant tab — Buttons for a mouse,
-        // Lighting for a wired keyboard, Device for everything else.
-        self.active_tab = AppState::try_global(cx)
-            .map(|state| state.read(cx))
-            .and_then(AppState::current_record)
-            .map_or(DetailTab::Device, DetailTab::default_for);
+    /// Switch screens. The one route transition: it moves keyboard focus to
+    /// the new screen's landing target in the same step, because the element
+    /// that held focus is not rendered on the new route (see
+    /// [`crate::ui::focus`]).
+    ///
+    /// Opening a device makes it the functionally active device too (hook
+    /// bindings, DPI, and the persisted selection follow
+    /// [`AppState::select_device`]) and lands on its first section tab.
+    /// Returning Home leaves the selection untouched — the route is purely
+    /// presentational — and lands on the card of the device just left.
+    fn navigate(&mut self, route: Route, window: &mut Window, cx: &mut Context<Self>) {
+        let left = match &self.route {
+            Route::Device { record_key } => Some(record_key.clone()),
+            Route::Home => None,
+        };
+        if let Route::Device { record_key } = &route {
+            AppState::apply(cx, |state| {
+                state
+                    .devices()
+                    .iter()
+                    .position(|record| record.record_key() == *record_key)
+                    .map_or_else(StateEvents::none, |idx| state.select_device(idx))
+            });
+            AppState::load_current_device_reads(cx);
+            // Land on the device's first relevant tab — Buttons for a mouse,
+            // Lighting for a wired keyboard, Device for everything else.
+            self.active_tab = AppState::try_global(cx)
+                .map(|state| state.read(cx))
+                .and_then(AppState::current_record)
+                .map_or(DetailTab::Device, DetailTab::default_for);
+        }
+        self.route = route;
+        let target = match (&self.route, left) {
+            (Route::Home, Some(left)) if Self::device_listed(&left, cx) => {
+                Some(self.card_focus.handle(&left, cx))
+            }
+            _ => self.landing_target(cx),
+        };
+        target
+            .unwrap_or_else(|| self.focus_handle.clone())
+            .focus(window, cx);
         cx.notify();
     }
 
-    /// Return to the device gallery. Leaves the active-device selection
-    /// untouched — the route is purely presentational.
-    fn go_home(&mut self, cx: &mut Context<Self>) {
-        self.route = Route::Home;
-        cx.notify();
+    /// Where focus belongs on the current route when nothing more specific
+    /// was declared: the device page's selected section tab, or the active
+    /// device's Home card. `None` only when neither is rendered.
+    fn landing_target(&mut self, cx: &mut Context<Self>) -> Option<gpui::FocusHandle> {
+        match &self.route {
+            Route::Device { .. } => {
+                let tab = self.visible_tab(cx)?;
+                Some(self.section_focus.handle(&tab, cx))
+            }
+            Route::Home => {
+                let key = AppState::try_read(cx)
+                    .and_then(|state| state.current_record().or_else(|| state.devices().first()))
+                    .map(DeviceRecord::record_key)?;
+                Some(self.card_focus.handle(&key, cx))
+            }
+        }
+    }
+
+    /// The section the device page shows: the stored tab while it belongs to
+    /// the live device, else that device's first tab. `None` when the route's
+    /// device is gone, which render turns back into Home.
+    fn visible_tab(&self, cx: &App) -> Option<DetailTab> {
+        let Route::Device { record_key } = &self.route else {
+            return None;
+        };
+        let record = AppState::try_read(cx)
+            .and_then(AppState::current_record)
+            .filter(|record| record.record_key() == *record_key)?;
+        let tabs = DetailTab::tabs_for(record);
+        Some(if tabs.contains(&self.active_tab) {
+            self.active_tab
+        } else {
+            tabs.first().copied().unwrap_or(DetailTab::Device)
+        })
+    }
+
+    fn device_listed(record_key: &str, cx: &App) -> bool {
+        AppState::try_read(cx).is_some_and(|state| {
+            state
+                .devices()
+                .iter()
+                .any(|record| record.record_key() == record_key)
+        })
+    }
+
+    /// Open `record_key`'s device page.
+    fn open_device(&mut self, record_key: String, window: &mut Window, cx: &mut Context<Self>) {
+        self.navigate(Route::Device { record_key }, window, cx);
+    }
+
+    /// Return to the gallery from a device page; a no-op on Home.
+    fn go_back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !matches!(self.route, Route::Home) {
+            self.navigate(Route::Home, window, cx);
+        }
     }
 
     /// Attach the window-level back-navigation listeners to `root`: a mouse
@@ -343,19 +426,18 @@ impl AppView {
     /// us — the native navigate button (its default binding never diverts, so
     /// the OS still sees it), and the contextual [`NavigateBack`] action, bound
     /// to Alt+Left (what a rebound BrowserBack action injects on Linux and what
-    /// keyboard users expect).
+    /// keyboard users expect) and Escape.
     fn with_back_navigation(root: gpui::Div, cx: &mut Context<Self>) -> gpui::Div {
         root.on_mouse_down(
             MouseButton::Navigate(NavigationDirection::Back),
-            cx.listener(|this, _, _, cx| {
-                if !matches!(this.route, Route::Home) {
-                    this.go_home(cx);
-                }
-            }),
+            cx.listener(|this, _, window, cx| this.go_back(window, cx)),
         )
-        .on_action(cx.listener(|this, _: &NavigateBack, _, cx| {
-            if !matches!(this.route, Route::Home) {
-                this.go_home(cx);
+        .on_action(cx.listener(|this, _: &NavigateBack, window, cx| {
+            if matches!(this.route, Route::Home) {
+                // Escape on Home is nobody's; let an outer handler have it.
+                cx.propagate();
+            } else {
+                this.go_back(window, cx);
             }
         }))
     }
@@ -567,20 +649,15 @@ impl AppView {
 
         let (header_el, content_el) = if show_device {
             // Resolve the active section once for both the navigation rail and
-            // its workspace. The stored tab may not belong to this device — it
-            // can linger across a hot-plug onto a different kind — so fall back
-            // to the device's first tab without mutating `active_tab`.
+            // its workspace — and, through the same resolver, for the focus
+            // landing target.
             let record = AppState::try_read(cx)
                 .and_then(AppState::current_record)
                 .cloned();
             let tabs = record
                 .as_ref()
                 .map_or_else(|| vec![DetailTab::Device], DetailTab::tabs_for);
-            let active = if tabs.contains(&self.active_tab) {
-                self.active_tab
-            } else {
-                tabs.first().copied().unwrap_or(DetailTab::Device)
-            };
+            let active = self.visible_tab(cx).unwrap_or(DetailTab::Device);
             // Run the camera only while its live-preview tab is the one on screen;
             // any other tab, device, or Home tears the session down (LED off).
             // Use capture_id (OS open id), not config_key — the latter prefers
@@ -609,6 +686,7 @@ impl AppView {
                         camera_controls: &self.camera_controls,
                         light_panel: &self.light_panel,
                     },
+                    &mut self.section_focus,
                     &self.profile_icons,
                     &self.app_catalog,
                     &tabs,
@@ -623,7 +701,7 @@ impl AppView {
             (
                 home::home_header(cx).into_any_element(),
                 if has_device {
-                    home::device_gallery(cx).into_any_element()
+                    home::device_gallery(&mut self.card_focus, cx).into_any_element()
                 } else {
                     match status.inventory {
                         InventoryHealth::Scanning => home::device_scanning_state(cx),

@@ -50,6 +50,10 @@ preset = "Forhåndsinnstilling"
 remove_named_item = "Fjern %{name}"
 enable = "Aktiver"
 not_now = "Ikke nå"
+name_value = "%{name}: %{value}"
+previous = "Previous"
+next = "Next"
+name_with_detail = "%{name} (%{detail})"
 
 [app]
 open_openlogi = "Åpne OpenLogi"
@@ -131,6 +135,11 @@ quit_logi_options_hid_access = "Avslutt Logi Options+ først, siden begge appene
 device = "Enhet"
 manage_this_device = "Administrer denne enheten"
 usb = "USB"
+device_sections = "Device sections"
+device_name = "Device name"
+previous_device = "Previous device"
+next_device = "Next device"
+device_options = "Device options for %{name}"
 
 [profiles]
 remove_all_profiles = "Delete all app settings"
@@ -179,6 +188,7 @@ remove_profile = "Fjern profil"
 remove_profile_dialog = "Fjern profil…"
 select_device_button_description = "Velg en knapp på enheten for å endre funksjonen."
 remove_profile_description = "Dette sletter profilens egendefinerte knappetilordninger. Standardtilordninger påvirkes ikke."
+search_applications_label = "Search applications"
 
 [pointer]
 mouse_button_profiles = "Profiler for museknapper"
@@ -249,6 +259,9 @@ high_resolution_scrolling_description = "Oppdager finere bevegelse mellom hakken
 wheel_resolution_unsupported = "Denne enheten støtter ikke styring av hjuloppløsning."
 wheel_resolution_other_connection = "Enheten støtter hjuloppløsning via den andre tilkoblingen, men ikke denne."
 smartshift = "SmartShift"
+dpi_value = "%{value} DPI"
+remove_dpi_preset = "Remove %{value} DPI preset"
+add_current_dpi_preset = "Add current DPI as preset"
 
 [actions]
 bind_control = "Tilordne %{name}"
@@ -337,6 +350,7 @@ type_text_action = "Skriv «%{text}»"
 workflow_step_count_singular = "Arbeidsflyt (1 trinn)"
 workflow_step_count_plural = "Arbeidsflyt (%{count} trinn)"
 open_named_target = "Åpne %{name}"
+search_actions_label = "Search actions"
 
 [pairing]
 add_device = "Legg til enhet"
@@ -491,6 +505,7 @@ color_theme = "Fargetema"
 app_icon = "Appikon"
 app_icon_description = "Velg ikonet OpenLogi viser i Dock, Finder og Launchpad."
 interface_language = "Grensesnittspråk"
+search_themes = "Search themes"
 
 [diagnostics]
 diagnostics = "Diagnostikk"
@@ -524,12 +539,24 @@ image = "Bilde"
 streaming = "Strømming"
 video_call = "Videosamtale"
 camera_preview_platform_unavailable = "Direkte forhåndsvisning er ikke tilgjengelig på denne plattformen ennå."
+auto_control = "Auto %{control}"
 
 [lighting]
 colour_temperature = "Fargetemperatur"
 applying_light_setting = "Bruker lysinnstilling…"
 auto_on_with_camera = "Slå på automatisk med kameraet"
 camera_light_auto_description = "Slå på lyset når et kamera er i bruk, og av når ingen kameraer er aktive."
+power = "Power"
+color = "Farge"
+color_red = "Red"
+color_orange = "Orange"
+color_yellow = "Yellow"
+color_green = "Green"
+color_teal = "Teal"
+color_blue = "Blue"
+color_indigo = "Indigo"
+color_purple = "Purple"
+color_white = "White"
 
 [action_ring]
 actions_ring = "Handlingsring"
@@ -560,6 +587,16 @@ custom_shortcut = "Egendefinert snarvei"
 shortcut_e_g_cmd_plus_shift_plus_p = "Snarvei, f.eks. Cmd+Shift+P"
 application_folder_path_or_url = "Program, mappebane eller URL"
 open_application_or_folder = "Åpne program eller mappe"
+add_shortcut = "Add shortcut"
+add_application = "Add application"
+slot_top = "Top"
+slot_top_right = "Top right"
+slot_right = "Right"
+slot_bottom_right = "Bottom right"
+slot_bottom = "Bottom"
+slot_bottom_left = "Bottom left"
+slot_left = "Left"
+slot_top_left = "Top left"
 
 [keyboard]
 editor_unavailable = "Redigering er utilgjengelig"
@@ -573,3 +610,4 @@ play_pause_key = "Spill av/pause-tast"
 mute_key = "Dempetast"
 volume_down_key = "Volum ned-tast"
 volume_up_key = "Volum opp-tast"
+remove_workflow_step = "Remove step %{number}: %{step}"

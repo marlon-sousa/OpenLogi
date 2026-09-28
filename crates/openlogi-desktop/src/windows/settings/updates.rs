@@ -1,5 +1,6 @@
 //! Updates settings page.
 
+use super::switch_item;
 use super::{
     App, AppState, Button, Disableable, Entity, FontWeight, IconName, InteractiveElement as _,
     ParentElement, RELEASES_URL, SettingField, SettingGroup, SettingItem, SettingPage, Sizable,
@@ -21,29 +22,22 @@ pub(super) fn updates_page(updater: Entity<Updater>) -> SettingPage {
 
     let toggles = SettingGroup::new()
         .item(
-            SettingItem::new(
+            switch_item(
                 tr!("app.check_for_updates_setting"),
-                SettingField::switch(
-                    |cx| AppState::try_read(cx).is_some_and(|s| s.app_settings().check_for_updates),
-                    |enabled, cx| {
-                        AppState::apply(cx, |state| state.commit_check_for_updates(enabled));
-                    },
-                ),
+                |cx| AppState::try_read(cx).is_some_and(|s| s.app_settings().check_for_updates),
+                |enabled, cx| {
+                    AppState::apply(cx, |state| state.commit_check_for_updates(enabled));
+                },
             )
             .description(tr!("app.update_check_frequency_description")),
         )
         .item(
-            SettingItem::new(
+            switch_item(
                 tr!("updates.automatically_download_and_install"),
-                SettingField::switch(
-                    |cx| {
-                        AppState::try_read(cx)
-                            .is_some_and(|s| s.app_settings().auto_install_updates)
-                    },
-                    |enabled, cx| {
-                        AppState::apply(cx, |state| state.commit_auto_install_updates(enabled));
-                    },
-                ),
+                |cx| AppState::try_read(cx).is_some_and(|s| s.app_settings().auto_install_updates),
+                |enabled, cx| {
+                    AppState::apply(cx, |state| state.commit_auto_install_updates(enabled));
+                },
             )
             .description(tr!("updates.automatic_update_description")),
         );

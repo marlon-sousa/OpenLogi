@@ -17,9 +17,7 @@ use gpui::{
     AnyElement, App, Context, IntoElement, ParentElement, Render, SharedString, Styled,
     Subscription, Window, div, px, rgb,
 };
-use gpui_component::{
-    Disableable as _, Selectable as _, button::Button, h_flex, slider::Slider, v_flex,
-};
+use gpui_component::{Disableable as _, Selectable as _, button::Button, h_flex, v_flex};
 use openlogi_core::config::{
     SMARTSHIFT_AUTO_DISENGAGE_DEFAULT, SMARTSHIFT_MIN_AUTO_DISENGAGE, ThumbwheelSensitivity,
 };
@@ -32,7 +30,7 @@ use crate::state::{
     StateEvents,
 };
 use crate::ui::commit_slider::{CommitSlider, SliderRange};
-use crate::ui::components::Toggle;
+use crate::ui::components::{Toggle, choice_button, control_group};
 use crate::ui::section::section_label;
 use crate::ui::status::{retry_line, status_line};
 use crate::ui::theme::{self, ACCENT_BLUE, Palette, Typography as _};
@@ -146,7 +144,8 @@ impl SmartShiftPanel {
             .gap_2()
             .child(section_label(tr!("pointer.wheel_mode"), pal))
             .child(
-                h_flex()
+                control_group("smartshift-wheel-mode", tr!("pointer.wheel_mode"))
+                    .flex()
                     .gap_2()
                     .child(mode_pill(
                         tr!("pointer.free_spin"),
@@ -191,7 +190,11 @@ impl SmartShiftPanel {
                     ),
             )
             .when(sensitivity_enabled, |row| {
-                row.child(Slider::new(self.threshold.slider()).horizontal())
+                row.child(
+                    self.threshold
+                        .control(tr!("pointer.sensitivity"))
+                        .value_text(format!("{display}")),
+                )
             })
             .when(!sensitivity_enabled, |row| row.child(disabled_track(pal)))
             .child(
@@ -244,7 +247,11 @@ impl SmartShiftPanel {
                             .child(format!("{display}")),
                     ),
             )
-            .child(Slider::new(self.wheel_sensitivity.slider()).horizontal())
+            .child(
+                self.wheel_sensitivity
+                    .control(tr!("pointer.thumb_wheel_sensitivity"))
+                    .value_text(format!("{display}")),
+            )
     }
 }
 
@@ -350,7 +357,7 @@ fn permanent_row(
                 ),
         )
         .child(
-            Toggle::new("smartshift-permanent")
+            Toggle::new("smartshift-permanent", tr!("pointer.permanent_ratchet"))
                 .selected(permanent)
                 .disabled(!ratchet)
                 .on_change(move |permanent, _window, cx| {
@@ -378,13 +385,11 @@ fn mode_pill(label: SharedString, selected: bool, status: SmartShiftStatus) -> i
         SmartShiftMode::Free => "smartshift-mode-free",
         SmartShiftMode::Ratchet => "smartshift-mode-ratchet",
     };
-    Button::new(id)
-        .compact()
-        .label(label)
-        .selected(selected)
-        .on_click(move |_event, _window, cx| {
+    choice_button(Button::new(id).compact().label(label), selected).on_click(
+        move |_event, _window, cx| {
             AppState::update_smartshift(cx, status);
-        })
+        },
+    )
 }
 
 /// A greyed bar standing in for the slider when sensitivity isn't adjustable.

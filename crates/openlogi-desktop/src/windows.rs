@@ -16,9 +16,9 @@ pub mod update_consent;
 
 use crate::ui::theme::Typography as _;
 use gpui::{
-    App, AppContext as _, Bounds, Context, Global, IntoElement, ParentElement as _, Pixels, Render,
-    SharedString, Size, Styled as _, Subscription, TitlebarOptions, WindowBounds, WindowHandle,
-    WindowOptions, div,
+    App, AppContext as _, Bounds, Context, Entity, Global, IntoElement, ParentElement as _, Pixels,
+    Render, SharedString, Size, Styled as _, Subscription, TitlebarOptions, WindowBounds,
+    WindowHandle, WindowOptions, div,
 };
 use gpui_component::{ActiveTheme as _, Root, TitleBar};
 use openlogi_core::brand::APP_ID;
@@ -103,6 +103,23 @@ pub trait AuxWindow: Render + Sized {
     fn set_appearance_obs(&mut self, sub: Subscription);
 }
 
+/// An auxiliary window's content: the themed view from `build_view` under the
+/// component `Root`, following OS appearance changes. Shared with the
+/// accessibility tests, so they exercise the production tree.
+pub(crate) fn aux_root<V: AuxWindow + 'static>(
+    build_view: impl FnOnce(&mut gpui::Window, &mut Context<V>) -> V + 'static,
+) -> impl FnOnce(&mut gpui::Window, &mut App) -> Entity<Root> {
+    |window, cx| {
+        crate::ui::theme::apply_from_settings(Some(window), cx);
+        let view = cx.new(|cx| build_view(window, cx));
+        let appearance_obs = window.observe_window_appearance(|window, cx| {
+            crate::ui::theme::apply_from_settings(Some(window), cx);
+        });
+        view.update(cx, |v, _| v.set_appearance_obs(appearance_obs));
+        cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
+    }
+}
+
 /// Focus the window stored in `slot` if it's still open, otherwise open a new
 /// one and record its handle.
 ///
@@ -146,15 +163,7 @@ pub fn open_or_focus<V: AuxWindow + 'static>(
         ..WindowOptions::default()
     };
 
-    let opened = cx.open_window(options, |window, cx| {
-        crate::ui::theme::apply_from_settings(Some(window), cx);
-        let view = cx.new(|cx| build_view(window, cx));
-        let appearance_obs = window.observe_window_appearance(|window, cx| {
-            crate::ui::theme::apply_from_settings(Some(window), cx);
-        });
-        view.update(cx, |v, _| v.set_appearance_obs(appearance_obs));
-        cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
-    });
+    let opened = cx.open_window(options, aux_root(build_view));
 
     match opened {
         Ok(handle) => {

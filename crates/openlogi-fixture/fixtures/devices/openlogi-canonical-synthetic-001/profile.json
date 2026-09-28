@@ -81,7 +81,7 @@
             "extended_model_id": 0
           },
           "capabilities": {
-            "buttons": false,
+            "buttons": true,
             "pointer": false,
             "lighting": true,
             "scroll_inversion": false,

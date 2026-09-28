@@ -9,7 +9,7 @@ use gpui::{
     prelude::FluentBuilder as _, px, rgb,
 };
 use gpui_base::Button as BaseButton;
-use gpui_component::{IconName, Selectable as _, h_flex, slider::Slider};
+use gpui_component::{IconName, Selectable as _, h_flex};
 use openlogi_camera::CameraControl;
 
 use super::{BUILTIN_PROFILES, CameraControlsPanel, ControlSlider};
@@ -134,7 +134,7 @@ pub(super) fn control_row(
                 // Dimmed while auto owns the value, but still draggable —
                 // grabbing the slider takes the control over to manual.
                 .when(dimmed, |s| s.opacity(0.55))
-                .child(Slider::new(slider.slider.slider()).horizontal()),
+                .child(slider.slider.control(slider.label.clone())),
         )
         .child(
             div()
@@ -162,7 +162,7 @@ pub(super) fn control_row(
             BaseButton::new((ElementId::from("camera-control-auto"), toggle.name()))
                 .role(Role::CheckBox)
                 .selected(on)
-                .accessibility_label(tr!("common.auto"))
+                .accessibility_label(tr!("camera.auto_control", control => slider.label.clone()))
                 .aria_toggled(if on { Toggled::True } else { Toggled::False })
                 .px_1p5()
                 .py_0p5()

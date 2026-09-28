@@ -108,6 +108,7 @@ fn text_editor_card(
     pal: Palette,
 ) -> gpui::Div {
     let heading = tr!(kind.heading_key());
+    let field_label = heading.clone();
     let key_name = trigger.to_string();
 
     compact_panel(pal)
@@ -121,7 +122,7 @@ fn text_editor_card(
             v_flex()
                 .p_2()
                 .gap_2()
-                .child(div().child(control_input(&text_state).cleanable(true)))
+                .child(div().child(control_input(&text_state, field_label).cleanable(true)))
                 .child(editor_action_row(trigger, kind, view)),
         )
 }
@@ -258,8 +259,13 @@ impl RenderOnce for WorkflowStepRow {
         };
         let pal = theme::palette(cx);
         let view_remove = self.view;
+        let remove_label = tr!(
+            "keyboard.remove_workflow_step",
+            number => self.idx + 1,
+            step => format!("{type_label} {}", step_preview_text(&self.step))
+        );
 
-        MenuRow::new(("wf-step", self.idx))
+        MenuRow::new(("wf-step", self.idx), remove_label)
             .child(
                 h_flex()
                     .w_full()
@@ -293,7 +299,14 @@ impl RenderOnce for WorkflowStepRow {
 }
 
 fn step_preview(step: &WorkflowStep, pal: Palette) -> impl IntoElement {
-    let text: String = match step {
+    div()
+        .text_caption()
+        .text_color(pal.text_primary)
+        .child(step_preview_text(step))
+}
+
+fn step_preview_text(step: &WorkflowStep) -> String {
+    match step {
         WorkflowStep::TypeText(s) => {
             if s.is_empty() {
                 "…".to_string()
@@ -310,11 +323,7 @@ fn step_preview(step: &WorkflowStep, pal: Palette) -> impl IntoElement {
                 s.clone()
             }
         }
-    };
-    div()
-        .text_caption()
-        .text_color(pal.text_primary)
-        .child(text)
+    }
 }
 
 fn key_combo_preview(combo: &KeyCombo) -> String {

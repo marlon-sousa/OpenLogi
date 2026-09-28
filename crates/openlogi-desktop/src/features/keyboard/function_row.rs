@@ -27,9 +27,10 @@ use std::sync::Arc;
 use gpui::{
     AnyElement, App, AppContext as _, Bounds, Context, Entity, FontWeight, Hsla,
     InteractiveElement, IntoElement, ParentElement, PathBuilder, Render, RenderOnce, Role,
-    SharedString, StatefulInteractiveElement as _, Styled, Subscription, Window, canvas, div, hsla,
-    point, prelude::FluentBuilder as _, px, rgb, svg,
+    SharedString, Styled, Subscription, Window, canvas, div, hsla, point,
+    prelude::FluentBuilder as _, px, rgb, svg,
 };
+use gpui::{FocusHandle, KeyBinding, actions};
 use gpui_component::{Selectable as _, h_flex, input::InputState, v_flex};
 use openlogi_core::binding::{Action, WorkflowStep};
 use openlogi_core::config::{FunctionKey, KeyModifiers, KeyTrigger};
@@ -46,7 +47,8 @@ use crate::features::mouse::geometry::asset_dimensions_for_png;
 use crate::services::assets::{GlowGeometry, ResolvedAsset};
 use crate::state::{AppState, StateEvent};
 use crate::ui::action::localized_action_label;
-use crate::ui::components::MenuRow;
+use crate::ui::components::{ControlCallout, ControlTarget, MenuRow, control_group, heading};
+use crate::ui::focus::FocusTargets;
 use crate::ui::theme::{self, ACCENT_BLUE, Palette, Typography as _};
 use gpui::ease_in_out;
 use gpui::{Animation, AnimationExt, img};
@@ -101,7 +103,33 @@ pub struct FunctionRowView {
     text_state: Option<Entity<InputState>>,
     /// Draft copy of the Workflow steps under edit.
     workflow_draft: Vec<WorkflowStep>,
+    /// Each key callout's focus handle, by key index, so closing the panel
+    /// returns focus to the key that opened it.
+    key_focus: FocusTargets<usize>,
+    /// The open panel's landing row: its current choice, or its first.
+    choice_focus: FocusHandle,
     _state_obs: Subscription,
+}
+
+actions!(
+    keyboard,
+    [
+        /// Close the key configuration panel and return to its key.
+        CloseKeyPanel
+    ]
+);
+
+/// Key context present only while a key's panel is open, so Escape closes
+/// the panel before it can leave the device page.
+const KEY_PANEL_CONTEXT: &str = "KeyPanel";
+
+/// The Keys page's bindings; installed with the app's others.
+pub(crate) fn bind_keys(cx: &mut App) {
+    cx.bind_keys([KeyBinding::new(
+        "escape",
+        CloseKeyPanel,
+        Some(KEY_PANEL_CONTEXT),
+    )]);
 }
 
 impl FunctionRowView {
@@ -115,6 +143,8 @@ impl FunctionRowView {
             active_editor: None,
             text_state: None,
             workflow_draft: Vec::new(),
+            key_focus: FocusTargets::default(),
+            choice_focus: cx.focus_handle(),
             _state_obs: state_obs,
         }
     }
@@ -131,10 +161,24 @@ impl FunctionRowView {
         cx.notify();
     }
 
+    /// Close the open panel and put focus back on the key it configured.
+    fn close_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(idx) = self.selected_key {
+            self.select_key(None, cx);
+            self.key_focus.handle(&idx, cx).focus(window, cx);
+        }
+    }
+
     /// Toggle a key selection from a click on either its callout or key hit
     /// target.
-    pub(crate) fn click_key(&mut self, idx: usize, cx: &mut Context<Self>) {
-        self.select_key(next_selection_after_click(self.selected_key, idx), cx);
+    /// Opening a panel moves focus onto its current choice, so a screen
+    /// reader lands on what the key does now instead of staying on the key.
+    pub(crate) fn click_key(&mut self, idx: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let next = next_selection_after_click(self.selected_key, idx);
+        self.select_key(next, cx);
+        if next.is_some() {
+            self.choice_focus.focus(window, cx);
+        }
     }
 
     #[expect(dead_code, reason = "public accessor for the selection state")]
@@ -280,17 +324,32 @@ impl Render for FunctionRowView {
             }
         }
         let view = cx.entity();
-        let keyboard =
-            KeyboardPane::new(slots.clone(), image_path, glow, render_size, view.clone())
-                .selected(selected)
-                .hovered(hovered);
+        let key_focus = slots
+            .iter()
+            .map(|slot| self.key_focus.handle(&slot.idx, cx))
+            .collect();
+        let keyboard = KeyboardPane::new(
+            slots.clone(),
+            key_focus,
+            image_path,
+            glow,
+            render_size,
+            view.clone(),
+        )
+        .selected(selected)
+        .hovered(hovered);
         let panel = selected.map(|selected| self.config_panel(selected, &slots, &view, cx));
 
         // The whole row animates as one: when a key is selected the right-side
         // panel grows in and the keyboard nudges left to make room.
         v_flex()
+            .id("keyboard-function-row")
             .w_full()
             .items_center()
+            .when(selected.is_some(), |row| row.key_context(KEY_PANEL_CONTEXT))
+            .on_action(cx.listener(|this, _: &CloseKeyPanel, window, cx| {
+                this.close_panel(window, cx);
+            }))
             .child(InspectorRow::new(keyboard).panel(panel))
     }
 }
@@ -368,6 +427,8 @@ impl RenderOnce for InspectorRow {
 #[derive(IntoElement)]
 struct KeyboardPane {
     slots: Vec<KeySlot>,
+    /// Each slot's callout focus handle, indexed like `slots`.
+    key_focus: Vec<FocusHandle>,
     image_path: Option<std::path::PathBuf>,
     glow: Option<(Arc<GlowGeometry>, Hsla)>,
     render_size: (f32, f32),
@@ -379,6 +440,7 @@ struct KeyboardPane {
 impl KeyboardPane {
     fn new(
         slots: Vec<KeySlot>,
+        key_focus: Vec<FocusHandle>,
         image_path: Option<std::path::PathBuf>,
         glow: Option<(Arc<GlowGeometry>, Hsla)>,
         render_size: (f32, f32),
@@ -386,6 +448,7 @@ impl KeyboardPane {
     ) -> Self {
         Self {
             slots,
+            key_focus,
             image_path,
             glow,
             render_size,
@@ -446,9 +509,12 @@ impl RenderOnce for KeyboardPane {
             .children({
                 let count = self.slots.len();
                 let view_for_callouts = view_clone.clone();
+                let key_focus = self.key_focus;
                 self.slots.iter().cloned().map(move |slot| {
                     let highlighted = key_is_highlighted(slot.idx, selected, hovered);
                     KeyCallout {
+                        focus: key_focus[slot.idx].clone(),
+                        selected: selected == Some(slot.idx),
                         slot,
                         count,
                         highlighted,
@@ -473,12 +539,15 @@ impl RenderOnce for KeyboardPane {
     }
 }
 
-/// One callout bubble in the band above the keyboard.
+/// One callout bubble in the band above the keyboard: the key's one tab stop,
+/// named "Bind F1" with its binding as the description.
 #[derive(IntoElement)]
 struct KeyCallout {
     slot: KeySlot,
     count: usize,
     highlighted: bool,
+    selected: bool,
+    focus: FocusHandle,
     img_w: f32,
     view: Entity<FunctionRowView>,
 }
@@ -493,48 +562,37 @@ impl RenderOnce for KeyCallout {
         let view_click = self.view;
         let binding = self.slot.binding;
         let binding_icon = self.slot.binding_icon;
-        let highlighted = self.highlighted;
+        let lit = self.highlighted || self.selected;
+        let accent_or = |otherwise: Hsla| {
+            if lit {
+                rgb(ACCENT_BLUE).into()
+            } else {
+                otherwise
+            }
+        };
 
-        v_flex()
-            .id(("key-callout", idx))
+        ControlCallout::new(("key-callout", idx), self.slot.label)
+            .binding(binding.clone())
+            .selected(self.selected)
+            .expanded(self.selected)
+            .highlighted(self.highlighted)
+            .track_focus(&self.focus)
             .absolute()
             .top(px(top))
             .left(px(left))
             .w(px(KEY_CALLOUT_W))
             .h(px(KEY_CALLOUT_H))
             .px_1()
+            .flex()
+            .flex_col()
             .justify_center()
             .items_center()
             .gap(px(1.))
-            .rounded_md()
-            .border_1()
-            .border_color(if highlighted {
-                rgb(ACCENT_BLUE).into()
-            } else {
-                pal.border
-            })
-            .bg(if highlighted {
-                theme::accent_tint()
-            } else {
-                pal.control
-            })
-            .cursor_pointer()
-            .hover(move |s| {
-                s.bg(if highlighted {
-                    theme::accent_tint_hover()
-                } else {
-                    pal.control_hover
-                })
-            })
             .child(
                 div()
                     .text_caption()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(if highlighted {
-                        rgb(ACCENT_BLUE).into()
-                    } else {
-                        pal.text_primary
-                    })
+                    .text_color(accent_or(pal.text_primary))
                     .child(self.slot.label),
             )
             .child(
@@ -544,13 +602,13 @@ impl RenderOnce for KeyCallout {
                     .gap(px(2.))
                     .max_w(px(KEY_CALLOUT_W - 8.))
                     .when_some(binding_icon, |row, icon| {
-                        row.child(svg().path(icon).size(px(9.)).flex_none().text_color(
-                            if highlighted {
-                                rgb(ACCENT_BLUE).into()
-                            } else {
-                                pal.text_muted
-                            },
-                        ))
+                        row.child(
+                            svg()
+                                .path(icon)
+                                .size(px(9.))
+                                .flex_none()
+                                .text_color(accent_or(pal.text_muted)),
+                        )
                     })
                     .child(
                         div()
@@ -559,11 +617,7 @@ impl RenderOnce for KeyCallout {
                             .text_ellipsis()
                             .whitespace_nowrap()
                             .text_caption()
-                            .text_color(if highlighted {
-                                rgb(ACCENT_BLUE).into()
-                            } else {
-                                pal.text_muted
-                            })
+                            .text_color(accent_or(pal.text_muted))
                             .child(binding),
                     ),
             )
@@ -571,13 +625,14 @@ impl RenderOnce for KeyCallout {
                 let next = (*hovered).then_some(idx);
                 view_hover.update(cx, |v, vcx| v.set_hovered_key(next, vcx));
             })
-            .on_click(move |_ev, _window, cx| {
-                view_click.update(cx, |v, vcx| v.click_key(idx, vcx));
+            .on_click(move |_ev, window, cx| {
+                view_click.update(cx, |v, vcx| v.click_key(idx, window, vcx));
             })
     }
 }
 
-/// One invisible click-target over a function key. Selecting it opens the
+/// One click-target over a function key on the photo. Pointer-only: the
+/// callout above names the key and owns its tab stop. Selecting it opens the
 /// panel; hover/selection draws only a subtle keycap ring on the photo.
 fn key_click_target(
     slot: KeySlot,
@@ -586,15 +641,13 @@ fn key_click_target(
     view: &Entity<FunctionRowView>,
 ) -> impl IntoElement {
     let idx = slot.idx;
-    let x_frac = slot.x_frac;
-    let y_frac = slot.y_frac;
     let view_hover = view.clone();
     let view_click = view.clone();
-    let left = key_target_left_px(x_frac, img_w, KEY_TARGET_W);
-    let top = key_target_top_px(y_frac, img_h, KEY_TARGET_H);
+    let left = key_target_left_px(slot.x_frac, img_w, KEY_TARGET_W);
+    let top = key_target_top_px(slot.y_frac, img_h, KEY_TARGET_H);
 
-    div()
-        .id(("key-target", idx))
+    ControlTarget::new(("key-target", idx), slot.label)
+        .pointer_only(true)
         .absolute()
         .top(px(top))
         .left(px(left))
@@ -603,7 +656,6 @@ fn key_click_target(
         .flex()
         .items_center()
         .justify_center()
-        .cursor_pointer()
         .when(highlighted, |el| {
             el.child(
                 div()
@@ -631,8 +683,8 @@ fn key_click_target(
             let next = (*hovered).then_some(idx);
             view_hover.update(cx, |v, vcx| v.set_hovered_key(next, vcx));
         })
-        .on_click(move |_ev, _window, cx| {
-            view_click.update(cx, |v, vcx| v.click_key(idx, vcx));
+        .on_click(move |_ev, window, cx| {
+            view_click.update(cx, |v, vcx| v.click_key(idx, window, vcx));
         })
 }
 
@@ -759,7 +811,6 @@ impl FunctionRowView {
         let pal = theme::palette(cx);
         let slot = &slots[selected_idx];
         let trigger = slot.trigger.clone();
-        let key_name = trigger.to_string();
 
         // If an editor is active, render it instead of the list.
         if let Some(kind) = self.active_editor {
@@ -778,27 +829,40 @@ impl FunctionRowView {
 
         let view_for_pick = view.clone();
         let trigger_for_pick = trigger.clone();
-        let on_pick: PickFn = Rc::new(move |action, _window, cx| {
+        let landing = self.choice_focus.clone();
+        let on_pick: PickFn = Rc::new(move |action, window, cx| {
             AppState::apply(cx, |state| {
                 state.commit_keyboard_binding(trigger_for_pick.clone(), Some(action))
             });
+            // The landing row moves to the new choice; keep focus on it.
+            landing.focus(window, cx);
             view_for_pick.update(cx, |_, vcx| vcx.notify());
         });
 
-        let rows = panel_action_rows(current.as_ref(), &on_pick, view, &pal);
+        let rows = panel_action_rows(current.as_ref(), &on_pick, &self.choice_focus, view, &pal);
 
         compact_panel(pal)
             .w(px(PANEL_W))
             .max_h(px(500.))
-            .child(title_header(&key_name, &pal))
+            .child(title_header(slot.label, &pal))
             .child(divider(pal))
-            .child(editor_scroll_list("key-panel-scroll", rows))
+            // Named for the key, so a screen reader entering the choices hears
+            // which key they bind.
+            .child(
+                control_group(
+                    "key-panel-choices",
+                    tr!("actions.bind_control", name => slot.label),
+                )
+                .child(editor_scroll_list("key-panel-scroll", rows)),
+            )
     }
 }
 
 /// The panel's title — shows which key is selected, e.g. "F1".
 fn title_header(key_name: &str, pal: &Palette) -> impl IntoElement {
-    h_flex()
+    let title = tr!("actions.bind_control", name => key_name);
+    heading("key-panel-title", 2, title.clone())
+        .flex()
         .items_center()
         .justify_between()
         .px_2()
@@ -808,7 +872,7 @@ fn title_header(key_name: &str, pal: &Palette) -> impl IntoElement {
                 .text_caption()
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(pal.text_muted)
-                .child(tr!("actions.bind_control", name => key_name)),
+                .child(title),
         )
 }
 
@@ -817,10 +881,26 @@ fn title_header(key_name: &str, pal: &Palette) -> impl IntoElement {
 fn panel_action_rows(
     current: Option<&Action>,
     on_pick: &PickFn,
+    landing: &FocusHandle,
     view: &Entity<FunctionRowView>,
     pal: &Palette,
 ) -> Vec<gpui::Div> {
-    let mut children = action_rows("panel-action", current, on_pick, *pal);
+    let power_user_current = matches!(
+        current,
+        Some(
+            Action::TypeText(_)
+                | Action::RunAppleScript(_)
+                | Action::RunShellCommand(_)
+                | Action::Workflow(_)
+        )
+    );
+    let mut children = action_rows(
+        "panel-action",
+        current,
+        on_pick,
+        *pal,
+        (!power_user_current).then_some(landing),
+    );
 
     let power_user_actions: &[(PowerUserKind, &str, &'static str)] = &[
         (
@@ -846,53 +926,58 @@ fn panel_action_rows(
     ];
 
     children.push(
-        v_flex()
-            .child(editor_section(tr!("actions.power_user").to_string(), *pal))
-            .children(power_user_actions.iter().enumerate().map(
-                |(idx, (kind, label, icon_path))| {
-                    let kind = *kind;
-                    let view = view.clone();
-                    let selected = matches!(
-                        (current, kind),
-                        (Some(Action::TypeText(_)), PowerUserKind::TypeText)
-                            | (
-                                Some(Action::RunAppleScript(_)),
-                                PowerUserKind::RunAppleScript
-                            )
-                            | (
-                                Some(Action::RunShellCommand(_)),
-                                PowerUserKind::RunShellCommand
-                            )
-                            | (Some(Action::Workflow(_)), PowerUserKind::Workflow)
-                    );
-                    MenuRow::new(format!("panel-power-{idx}"))
-                        .selected(selected)
-                        .role(Role::MenuItem)
-                        .child(
-                            h_flex()
-                                .items_center()
-                                .gap_2()
-                                .child(
-                                    svg()
-                                        .path(*icon_path)
-                                        .size_4()
-                                        .flex_none()
-                                        .text_color(pal.text_muted),
+        v_flex().child(
+            control_group("panel-power-user", tr!("actions.power_user"))
+                .flex()
+                .flex_col()
+                .child(editor_section(tr!("actions.power_user").to_string(), *pal))
+                .children(power_user_actions.iter().enumerate().map(
+                    |(idx, (kind, label, icon_path))| {
+                        let kind = *kind;
+                        let view = view.clone();
+                        let selected = matches!(
+                            (current, kind),
+                            (Some(Action::TypeText(_)), PowerUserKind::TypeText)
+                                | (
+                                    Some(Action::RunAppleScript(_)),
+                                    PowerUserKind::RunAppleScript
                                 )
-                                .child(div().child((*label).to_string())),
-                        )
-                        .when(selected, |s| {
-                            s.child(
-                                gpui_component::Icon::new(gpui_component::IconName::Check)
-                                    .size_3()
-                                    .text_color(rgb(ACCENT_BLUE)),
+                                | (
+                                    Some(Action::RunShellCommand(_)),
+                                    PowerUserKind::RunShellCommand
+                                )
+                                | (Some(Action::Workflow(_)), PowerUserKind::Workflow)
+                        );
+                        MenuRow::new(format!("panel-power-{idx}"), (*label).to_string())
+                            .selected(selected)
+                            .role(Role::MenuItemRadio)
+                            .when(selected, |row| row.track_focus(landing))
+                            .child(
+                                h_flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .child(
+                                        svg()
+                                            .path(*icon_path)
+                                            .size_4()
+                                            .flex_none()
+                                            .text_color(pal.text_muted),
+                                    )
+                                    .child(div().child((*label).to_string())),
                             )
-                        })
-                        .on_click(move |_ev, _window, cx| {
-                            view.update(cx, |v, vcx| v.open_editor(kind, vcx));
-                        })
-                },
-            )),
+                            .when(selected, |s| {
+                                s.child(
+                                    gpui_component::Icon::new(gpui_component::IconName::Check)
+                                        .size_3()
+                                        .text_color(rgb(ACCENT_BLUE)),
+                                )
+                            })
+                            .on_click(move |_ev, _window, cx| {
+                                view.update(cx, |v, vcx| v.open_editor(kind, vcx));
+                            })
+                    },
+                )),
+        ),
     );
     children
 }

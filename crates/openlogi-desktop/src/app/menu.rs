@@ -110,7 +110,14 @@ pub fn install(cx: &mut App) {
         KeyBinding::new("cmd-w", CloseWindow, None),
         KeyBinding::new("cmd-,", OpenSettings, None),
         KeyBinding::new("alt-left", NavigateBack, Some(APP_KEY_CONTEXT)),
+        // Screen-reader users expect Escape to leave a page; controls that own
+        // Escape (inputs, menus, dialogs, the key panel) sit deeper and win.
+        KeyBinding::new("escape", NavigateBack, Some(APP_KEY_CONTEXT)),
     ]);
+
+    crate::features::keyboard::function_row::bind_keys(cx);
+    crate::features::mouse::view::bind_keys(cx);
+    crate::windows::add_device::bind_keys(cx);
 
     cx.set_menus(menus(cx));
 }

@@ -6,6 +6,7 @@
 //! is how a user opts in on first launch. Either choice marks the prompt seen
 //! so it never reappears; "Enable" also runs one check immediately.
 
+use crate::ui::focus::keep_focus_on_root;
 use crate::ui::theme::Typography as _;
 use gpui::{
     App, Context, FocusHandle, InteractiveElement, IntoElement, ParentElement as _, Render, Size,
@@ -16,22 +17,26 @@ use gpui_updater::Updater;
 
 use crate::app::menu::{CloseWindow, Minimize, Zoom};
 use crate::state::AppState;
-use crate::ui::components::control_button;
+use crate::ui::components::{control_button, heading, readout};
 use crate::ui::theme;
 use crate::windows::{self, AuxWindow};
 
 /// Standalone first-run update-consent window root view.
 pub struct UpdateConsentView {
     focus_handle: FocusHandle,
+    /// Returns focus to the root when the focused control disappears.
+    _keep_focus: Subscription,
     appearance_obs: Option<Subscription>,
 }
 
 impl UpdateConsentView {
-    fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub(crate) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let focus_handle = cx.focus_handle();
         focus_handle.focus(window, cx);
+        let keep_focus = keep_focus_on_root(window, cx, focus_handle.clone());
         Self {
             focus_handle,
+            _keep_focus: keep_focus,
             appearance_obs: None,
         }
     }
@@ -47,7 +52,8 @@ impl AuxWindow for UpdateConsentView {
 pub fn open(cx: &mut App) {
     windows::open_or_focus(
         |reg| &mut reg.update_consent,
-        "OpenLogi",
+        // The question itself, so a screen reader announces it as the window opens.
+        tr!("updates.check_for_updates_consent_title"),
         Size::new(px(380.), px(320.)),
         UpdateConsentView::new,
         cx,
@@ -96,14 +102,21 @@ impl Render for UpdateConsentView {
                             .gap_4()
                             .p_6()
                             .child(
-                                div()
-                                    .text_heading()
-                                    .text_center()
-                                    .child(tr!("updates.check_for_updates_consent_title")),
+                                heading(
+                                    "update-consent-title",
+                                    1,
+                                    tr!("updates.check_for_updates_consent_title"),
+                                )
+                                .text_heading()
+                                .text_center()
+                                .child(tr!("updates.check_for_updates_consent_title")),
                             )
                             .child(
-                                div()
-                                    .max_w(px(320.))
+                                readout(
+                                    "update-consent-description-text",
+                                    tr!("updates.update_consent_description"),
+                                )
+                                .max_w(px(320.))
                                     .text_body()
                                     .text_center()
                                     .text_color(pal.text_muted)

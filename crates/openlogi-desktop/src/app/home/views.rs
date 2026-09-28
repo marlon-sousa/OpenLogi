@@ -1,9 +1,9 @@
 //! Switchable grid, list, and carousel layouts for the Home device gallery.
 
 use gpui::{
-    AnyElement, Context, ElementId, InteractiveElement, IntoElement, ParentElement, Rems,
-    SharedString, StatefulInteractiveElement as _, Styled, div, prelude::FluentBuilder as _, px,
-    rems, rgb,
+    AnyElement, App, Context, ElementId, FocusHandle, InteractiveElement, IntoElement,
+    ParentElement, Rems, SharedString, StatefulInteractiveElement as _, Styled, div,
+    prelude::FluentBuilder as _, px, rems, rgb,
 };
 use gpui_base::Button as BaseButton;
 use gpui_component::{
@@ -24,6 +24,7 @@ use super::{
 use crate::state::{AppState, DeviceRecord};
 use crate::ui::battery::{BatteryIndicator, battery_charging_no_reading};
 use crate::ui::carousel::Carousel;
+use crate::ui::focus::FocusTargets;
 use crate::ui::theme::{self, ContentWidth, Palette, Typography as _};
 
 pub(super) fn device_view_switcher(
@@ -79,15 +80,32 @@ const GALLERY_MAX_W: Rems = rems(77.9375);
 
 /// Render the persisted Home layout. All three modes share ordering, metadata,
 /// accessibility, and active-device semantics; only spatial density changes.
-pub(in crate::app) fn device_gallery(cx: &mut Context<AppView>) -> AnyElement {
+pub(in crate::app) fn device_gallery(
+    card_focus: &mut FocusTargets<String>,
+    cx: &mut Context<AppView>,
+) -> AnyElement {
     let mode = AppState::try_read(cx).map_or(DeviceViewMode::Grid, |state| {
         state.app_settings().device_view_mode
     });
+    let focus = card_focus_handles(card_focus, cx);
     match mode {
-        DeviceViewMode::Grid => device_grid(cx).into_any_element(),
-        DeviceViewMode::List => device_list(cx).into_any_element(),
-        DeviceViewMode::Carousel => device_carousel(cx).into_any_element(),
+        DeviceViewMode::Grid => device_grid(&focus, cx).into_any_element(),
+        DeviceViewMode::List => device_list(&focus, cx).into_any_element(),
+        DeviceViewMode::Carousel => device_carousel(focus, cx).into_any_element(),
     }
+}
+
+/// Each device's card focus handle, by device index. The same handle backs
+/// the card in every layout, so returning from a device page can land on it.
+fn card_focus_handles(card_focus: &mut FocusTargets<String>, cx: &mut App) -> Vec<FocusHandle> {
+    let keys: Vec<String> = AppState::try_read(cx).map_or_else(Vec::new, |state| {
+        state
+            .devices()
+            .iter()
+            .map(DeviceRecord::record_key)
+            .collect()
+    });
+    keys.iter().map(|key| card_focus.handle(key, cx)).collect()
 }
 
 /// Connected devices first, preserving AppState's deterministic route order
@@ -98,7 +116,7 @@ pub(in crate::app) fn ordered_device_indices(records: &[DeviceRecord]) -> Vec<us
     indices
 }
 
-fn device_grid(cx: &mut Context<AppView>) -> impl IntoElement {
+fn device_grid(focus: &[FocusHandle], cx: &mut Context<AppView>) -> impl IntoElement {
     let view = cx.entity();
     let pal = theme::palette(cx);
     let cards = AppState::try_read(cx).map_or_else(Vec::new, |state| {
@@ -106,7 +124,7 @@ fn device_grid(cx: &mut Context<AppView>) -> impl IntoElement {
         ordered_device_indices(state.devices())
             .into_iter()
             .map(|idx| {
-                device_card_element(state, idx, active_idx, view.clone(), pal)
+                device_card_element(state, idx, active_idx, &focus[idx], view.clone(), pal)
                     .min_w(theme::GALLERY_CARD_MIN_W)
                     .max_w(theme::GALLERY_CARD_MAX_W)
                     .flex_1()
@@ -133,7 +151,7 @@ fn device_grid(cx: &mut Context<AppView>) -> impl IntoElement {
         )
 }
 
-fn device_list(cx: &mut Context<AppView>) -> impl IntoElement {
+fn device_list(focus: &[FocusHandle], cx: &mut Context<AppView>) -> impl IntoElement {
     let view = cx.entity();
     let pal = theme::palette(cx);
     let rows = AppState::try_read(cx).map_or_else(Vec::new, |state| {
@@ -141,7 +159,7 @@ fn device_list(cx: &mut Context<AppView>) -> impl IntoElement {
         ordered_device_indices(state.devices())
             .into_iter()
             .map(|idx| {
-                device_list_row(state, idx, active_idx, view.clone(), pal)
+                device_list_row(state, idx, active_idx, &focus[idx], view.clone(), pal)
                     .context_menu(device_menu(&state.devices()[idx]))
             })
             .collect()
@@ -163,7 +181,7 @@ fn device_list(cx: &mut Context<AppView>) -> impl IntoElement {
         )
 }
 
-fn device_carousel(cx: &mut Context<AppView>) -> impl IntoElement {
+fn device_carousel(focus: Vec<FocusHandle>, cx: &mut Context<AppView>) -> impl IntoElement {
     let view = cx.entity();
     let (order, selected) = AppState::try_read(cx).map_or_else(
         || (Vec::new(), 0),
@@ -179,6 +197,7 @@ fn device_carousel(cx: &mut Context<AppView>) -> impl IntoElement {
 
     v_flex().flex_1().w_full().min_h_0().child(
         Carousel::new("device-carousel", CAROUSEL_CARD_W)
+            .navigation_labels(tr!("device.previous_device"), tr!("device.next_device"))
             .len(order.len())
             .selected(selected)
             .gap(GALLERY_GAP)
@@ -191,7 +210,7 @@ fn device_carousel(cx: &mut Context<AppView>) -> impl IntoElement {
                     return div().into_any_element();
                 };
                 let active_idx = state.selected_device_index().unwrap_or(0);
-                device_card_element(state, idx, active_idx, view.clone(), pal)
+                device_card_element(state, idx, active_idx, &focus[idx], view.clone(), pal)
                     .context_menu(device_menu(&state.devices()[idx]))
                     .into_any_element()
             })
@@ -209,6 +228,7 @@ fn device_card_element(
     state: &AppState,
     idx: usize,
     active_idx: usize,
+    focus: &FocusHandle,
     view: gpui::Entity<AppView>,
     pal: Palette,
 ) -> BaseButton {
@@ -222,6 +242,7 @@ fn device_card_element(
     let glow = keyboard_glow(state, record);
 
     device_card(record, enabled, glow, light_enabled, light_settings, pal)
+        .track_focus(focus)
         .active(gpui::Styled::shadow_2xs)
         .accessibility_label(record.display_name.clone())
         .aria_description(device_accessibility_description(record))
@@ -229,9 +250,9 @@ fn device_card_element(
         .cursor_pointer()
         .hover(move |card| card.border_color(rgb(theme::ACCENT_BLUE)).shadow_sm())
         .focus_visible(move |card| card.border_color(rgb(theme::ACCENT_BLUE)).shadow_sm())
-        .on_click(move |_, _, cx| {
+        .on_click(move |_, window, cx| {
             view.update(cx, |this, cx| {
-                this.open_device(record_key.clone(), cx);
+                this.open_device(record_key.clone(), window, cx);
             });
         })
 }
@@ -240,6 +261,7 @@ fn device_list_row(
     state: &AppState,
     idx: usize,
     active_idx: usize,
+    focus: &FocusHandle,
     view: gpui::Entity<AppView>,
     pal: Palette,
 ) -> BaseButton {
@@ -323,6 +345,7 @@ fn device_list_row(
                     this.child(device_menu_button(record, pal))
                 }),
         )
+        .track_focus(focus)
         .active(gpui::Styled::shadow_2xs)
         .accessibility_label(record.display_name.clone())
         .aria_description(device_accessibility_description(record))
@@ -330,9 +353,9 @@ fn device_list_row(
         .cursor_pointer()
         .hover(move |row| row.border_color(rgb(theme::ACCENT_BLUE)).shadow_sm())
         .focus_visible(move |row| row.border_color(rgb(theme::ACCENT_BLUE)).shadow_sm())
-        .on_click(move |_, _, cx| {
+        .on_click(move |_, window, cx| {
             view.update(cx, |this, cx| {
-                this.open_device(record_key.clone(), cx);
+                this.open_device(record_key.clone(), window, cx);
             });
         })
 }

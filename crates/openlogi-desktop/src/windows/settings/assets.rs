@@ -1,5 +1,6 @@
 //! Assets (device-image cache) settings page.
 
+use super::switch_item;
 use crate::ui::theme::Typography as _;
 use gpui_base::Button as BaseButton;
 use std::time::Duration;
@@ -74,21 +75,17 @@ pub(super) fn assets_page(
             .description(tr!("assets.asset_source_description")),
         )
         .item(
-            SettingItem::new(
+            switch_item(
                 tr!("assets.automatically_download_device_images"),
-                SettingField::switch(
-                    |cx| {
-                        AppState::try_read(cx).is_none_or(|s| s.app_settings().auto_download_assets)
-                    },
-                    |enabled, cx| {
-                        AppState::apply(cx, |state| state.commit_auto_download_assets(enabled));
-                        // Re-enabling should fetch right away, not wait for the
-                        // next device event.
-                        if enabled {
-                            send_asset_command(cx, AssetCommand::Refresh);
-                        }
-                    },
-                ),
+                |cx| AppState::try_read(cx).is_none_or(|s| s.app_settings().auto_download_assets),
+                |enabled, cx| {
+                    AppState::apply(cx, |state| state.commit_auto_download_assets(enabled));
+                    // Re-enabling should fetch right away, not wait for the
+                    // next device event.
+                    if enabled {
+                        send_asset_command(cx, AssetCommand::Refresh);
+                    }
+                },
             )
             .description(tr!("assets.automatic_device_images_description")),
         )
