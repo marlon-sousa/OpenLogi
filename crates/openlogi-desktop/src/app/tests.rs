@@ -1,3 +1,5 @@
+mod a11y;
+
 use super::home::{connection_icon_path, ordered_device_indices};
 use super::{Capabilities, DetailTab, DeviceKind, DeviceRecord};
 use crate::ui::battery::{battery_charging_no_reading, battery_needs_attention};

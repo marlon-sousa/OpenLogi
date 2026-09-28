@@ -50,6 +50,10 @@ preset = "預設"
 remove_named_item = "移除 %{name}"
 enable = "啟用"
 not_now = "暫不"
+name_value = "%{name}: %{value}"
+previous = "Previous"
+next = "Next"
+name_with_detail = "%{name} (%{detail})"
 
 [app]
 open_openlogi = "開啟 OpenLogi"
@@ -131,6 +135,11 @@ quit_logi_options_hid_access = "正在使用 Logi Options+？請先結束，兩�
 device = "裝置"
 manage_this_device = "管理此裝置"
 usb = "USB"
+device_sections = "Device sections"
+device_name = "Device name"
+previous_device = "Previous device"
+next_device = "Next device"
+device_options = "Device options for %{name}"
 
 [profiles]
 remove_all_profiles = "刪除全部設定"
@@ -179,6 +188,7 @@ remove_profile = "移除設定檔"
 remove_profile_dialog = "移除設定檔…"
 select_device_button_description = "選擇裝置上的按鍵以更改其功能。"
 remove_profile_description = "這會刪除此設定檔的自訂按鍵指派，不會影響預設指派。"
+search_applications_label = "Search applications"
 
 [pointer]
 mouse_button_profiles = "滑鼠按鍵設定檔"
@@ -249,6 +259,9 @@ high_resolution_scrolling_description = "偵測棘輪段落之間更細微的移
 wheel_resolution_unsupported = "此裝置不支援滾輪解析度控制。"
 wheel_resolution_other_connection = "此裝置使用另一種連線時支援滾輪解像度，但目前連線不支援。"
 smartshift = "SmartShift"
+dpi_value = "%{value} DPI"
+remove_dpi_preset = "Remove %{value} DPI preset"
+add_current_dpi_preset = "Add current DPI as preset"
 
 [actions]
 bind_control = "綁定 %{name}"
@@ -337,6 +350,7 @@ type_text_action = "輸入「%{text}」"
 workflow_step_count_singular = "工作流程（1 個步驟）"
 workflow_step_count_plural = "工作流程（%{count} 個步驟）"
 open_named_target = "開啟 %{name}"
+search_actions_label = "Search actions"
 
 [pairing]
 add_device = "新增裝置"
@@ -491,6 +505,7 @@ color_theme = "配色主題"
 app_icon = "應用程式圖示"
 app_icon_description = "選擇 OpenLogi 在 Dock、Finder 與 Launchpad 中顯示的圖示。"
 interface_language = "介面語言"
+search_themes = "Search themes"
 
 [diagnostics]
 diagnostics = "診斷"
@@ -524,12 +539,24 @@ image = "影像"
 streaming = "直播"
 video_call = "視像通話"
 camera_preview_platform_unavailable = "此平台暫不支援即時預覽。"
+auto_control = "Auto %{control}"
 
 [lighting]
 colour_temperature = "色溫"
 applying_light_setting = "正在套用燈光設定…"
 auto_on_with_camera = "隨攝影機自動開啟"
 camera_light_auto_description = "任何攝影機使用時開燈，所有攝影機均未使用時關燈。"
+power = "Power"
+color = "顏色"
+color_red = "Red"
+color_orange = "Orange"
+color_yellow = "Yellow"
+color_green = "Green"
+color_teal = "Teal"
+color_blue = "Blue"
+color_indigo = "Indigo"
+color_purple = "Purple"
+color_white = "White"
 
 [action_ring]
 actions_ring = "動作環"
@@ -560,6 +587,16 @@ custom_shortcut = "自訂快速鍵"
 shortcut_e_g_cmd_plus_shift_plus_p = "快速鍵，例如 Cmd+Shift+P"
 application_folder_path_or_url = "應用程式、資料夾路徑或 URL"
 open_application_or_folder = "開啟應用程式或資料夾"
+add_shortcut = "Add shortcut"
+add_application = "Add application"
+slot_top = "Top"
+slot_top_right = "Top right"
+slot_right = "Right"
+slot_bottom_right = "Bottom right"
+slot_bottom = "Bottom"
+slot_bottom_left = "Bottom left"
+slot_left = "Left"
+slot_top_left = "Top left"
 
 [keyboard]
 editor_unavailable = "編輯器無法使用"
@@ -573,3 +610,4 @@ play_pause_key = "播放／暫停鍵"
 mute_key = "靜音鍵"
 volume_down_key = "降低音量鍵"
 volume_up_key = "提高音量鍵"
+remove_workflow_step = "Remove step %{number}: %{step}"

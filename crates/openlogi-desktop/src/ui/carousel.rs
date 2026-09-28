@@ -22,13 +22,11 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, App, ElementId, InteractiveElement as _, IntoElement, ParentElement as _, Rems,
-    RenderOnce, ScrollHandle, StatefulInteractiveElement as _, Styled, Window, div,
+    RenderOnce, ScrollHandle, SharedString, StatefulInteractiveElement as _, Styled, Window, div,
     prelude::FluentBuilder as _, rems,
 };
 use gpui_component::{
-    Disableable as _, IconName, Sizable as _, Size,
-    button::{Button, ButtonVariants as _},
-    h_flex, v_flex,
+    Disableable as _, IconName, Sizable as _, Size, button::ButtonVariants as _, h_flex, v_flex,
 };
 
 type SelectHandler = Rc<dyn Fn(&usize, &mut Window, &mut App) + 'static>;
@@ -47,6 +45,8 @@ pub struct Carousel {
     render_item: Option<ItemRenderer>,
     gap: Rems,
     on_select: Option<SelectHandler>,
+    /// Accessible names of the previous and next arrows.
+    navigation_labels: (SharedString, SharedString),
 }
 
 impl Carousel {
@@ -60,6 +60,7 @@ impl Carousel {
             render_item: None,
             gap: rems(1.),
             on_select: None,
+            navigation_labels: (tr!("common.previous"), tr!("common.next")),
         }
     }
 
@@ -95,6 +96,18 @@ impl Carousel {
         self
     }
 
+    /// Name the arrows for what they move through ("Previous device"); the
+    /// default is a bare "Previous" / "Next".
+    #[must_use]
+    pub fn navigation_labels(
+        mut self,
+        previous: impl Into<SharedString>,
+        next: impl Into<SharedString>,
+    ) -> Self {
+        self.navigation_labels = (previous.into(), next.into());
+        self
+    }
+
     /// Called with the new index when an arrow is activated.
     #[must_use]
     pub fn on_select(mut self, handler: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self {
@@ -124,6 +137,7 @@ impl Carousel {
             render_item,
             gap,
             on_select,
+            navigation_labels: (previous_label, next_label),
         } = self;
         v_flex().when_some(render_item.filter(|_| len > 0), |this, render_item| {
             let selected = selected.min(len - 1);
@@ -177,6 +191,7 @@ impl Carousel {
                 .when(multi, |this| {
                     this.child(arrow(
                         (id.clone(), "previous").into(),
+                        previous_label.clone(),
                         IconName::ChevronLeft,
                         selected.saturating_sub(1),
                         selected == 0,
@@ -188,6 +203,7 @@ impl Carousel {
                 .when(multi, |this| {
                     this.child(arrow(
                         (id.clone(), "next").into(),
+                        next_label.clone(),
                         IconName::ChevronRight,
                         (selected + 1).min(len - 1),
                         selected + 1 >= len,
@@ -203,14 +219,14 @@ impl Carousel {
 
 fn arrow(
     id: ElementId,
+    label: SharedString,
     icon: IconName,
     target: usize,
     disabled: bool,
     size: Size,
     on_select: Option<SelectHandler>,
 ) -> impl IntoElement {
-    Button::new(id)
-        .icon(icon)
+    crate::ui::components::icon_button(id, icon, label)
         .ghost()
         .with_size(size)
         .disabled(disabled)

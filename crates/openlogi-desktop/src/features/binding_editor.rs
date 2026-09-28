@@ -10,7 +10,7 @@ use gpui_component::{Icon, IconName, Selectable as _, h_flex, v_flex};
 use openlogi_core::binding::{Action, Category, GestureDirection};
 
 use crate::ui::action::localized_action_label;
-use crate::ui::components::MenuRow;
+use crate::ui::components::{MenuRow, control_group};
 use crate::ui::section::section_label;
 use crate::ui::theme::{ACCENT_BLUE, Palette, Typography as _};
 
@@ -114,8 +114,9 @@ pub(crate) fn action_rows(
     current: Option<&Action>,
     on_pick: &PickFn,
     pal: Palette,
+    landing: Option<&gpui::FocusHandle>,
 ) -> Vec<gpui::Div> {
-    action_rows_matching(id_prefix, current, "", on_pick, pal)
+    action_rows_matching(id_prefix, current, "", on_pick, pal, landing)
 }
 
 /// Build action rows filtered by localized action or category name.
@@ -125,10 +126,11 @@ pub(crate) fn action_rows_matching(
     query: &str,
     on_pick: &PickFn,
     pal: Palette,
+    landing: Option<&gpui::FocusHandle>,
 ) -> Vec<gpui::Div> {
     let query = query.trim().to_lowercase();
     let mut catalog_index = 0usize;
-    let mut sections = Vec::new();
+    let mut groups = Vec::new();
     for (category, actions) in grouped_catalog() {
         let category_label = rust_i18n::t!(category.translation_key());
         let category_matches = category_label.to_lowercase().contains(&query);
@@ -150,44 +152,65 @@ pub(crate) fn action_rows_matching(
                     || action.label().to_lowercase().contains(&query)
             })
             .collect();
-        if actions.is_empty() {
-            continue;
+        if !actions.is_empty() {
+            groups.push((category_label.into_owned(), actions));
         }
+    }
+    // Where focus lands when the list opens: the current choice, or the
+    // first one when the current action is not among these rows.
+    let rows = || groups.iter().flat_map(|(_, actions)| actions);
+    let landing_key = rows()
+        .find(|(_, action)| current == Some(action))
+        .or_else(|| rows().next())
+        .map(|(key, _)| *key);
+    let mut sections = Vec::new();
+    for (group_index, (category_label, actions)) in groups.into_iter().enumerate() {
         sections.push(
-            v_flex()
-                .child(editor_section(category_label.into_owned(), pal))
-                .children(actions.into_iter().map(|(action_key, action)| {
-                    let selected = current == Some(&action);
-                    let label = localized_action_label(&action);
-                    let accessible_label = label.clone();
-                    let icon_path = action_icon_path(&action);
-                    let on_pick = on_pick.clone();
-                    MenuRow::new((id_prefix, action_key))
-                        .selected(selected)
-                        .role(Role::MenuItem)
-                        .aria_label(accessible_label)
-                        .child(
-                            h_flex()
-                                .items_center()
-                                .gap_2()
-                                .child(
-                                    svg()
-                                        .path(icon_path)
-                                        .size_4()
-                                        .flex_none()
-                                        .text_color(pal.text_muted),
-                                )
-                                .child(div().child(label)),
-                        )
-                        .when(selected, |row| {
-                            row.child(
-                                Icon::new(IconName::Check)
-                                    .size_3()
-                                    .text_color(rgb(ACCENT_BLUE)),
+            // Named for its category, so a screen reader moving into it hears
+            // "Media" before "Play / Pause".
+            v_flex().child(
+                control_group((id_prefix, 10_000 + group_index), category_label.clone())
+                    .flex()
+                    .flex_col()
+                    .child(editor_section(category_label, pal))
+                    .children(actions.into_iter().map(|(action_key, action)| {
+                        let selected = current == Some(&action);
+                        let label = localized_action_label(&action);
+                        let accessible_label = label.clone();
+                        let icon_path = action_icon_path(&action);
+                        let on_pick = on_pick.clone();
+                        MenuRow::new((id_prefix, action_key), accessible_label)
+                            .selected(selected)
+                            .role(Role::MenuItemRadio)
+                            .when_some(
+                                landing.filter(|_| landing_key == Some(action_key)),
+                                MenuRow::track_focus,
                             )
-                        })
-                        .on_click(move |_event, window, cx| (on_pick)(action.clone(), window, cx))
-                })),
+                            .child(
+                                h_flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .child(
+                                        svg()
+                                            .path(icon_path)
+                                            .size_4()
+                                            .flex_none()
+                                            .text_color(pal.text_muted),
+                                    )
+                                    .child(div().child(label)),
+                            )
+                            .when(selected, |row| {
+                                row.child(
+                                    Icon::new(IconName::Check)
+                                        .size_3()
+                                        .text_color(rgb(ACCENT_BLUE)),
+                                )
+                            })
+                            .on_click(move |_event, window, cx| {
+                                (on_pick)(action.clone(), window, cx);
+                            })
+                    })),
+            ),
         );
     }
     sections

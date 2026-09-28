@@ -50,6 +50,10 @@ preset = "プリセット"
 remove_named_item = "%{name} を削除"
 enable = "有効にする"
 not_now = "今はしない"
+name_value = "%{name}: %{value}"
+previous = "Previous"
+next = "Next"
+name_with_detail = "%{name} (%{detail})"
 
 [app]
 open_openlogi = "OpenLogi を開く"
@@ -131,6 +135,11 @@ quit_logi_options_hid_access = "両方のアプリが HID++ を排他的に使�
 device = "デバイス"
 manage_this_device = "このデバイスを管理"
 usb = "USB"
+device_sections = "Device sections"
+device_name = "Device name"
+previous_device = "Previous device"
+next_device = "Next device"
+device_options = "Device options for %{name}"
 
 [profiles]
 remove_all_profiles = "Delete all app settings"
@@ -179,6 +188,7 @@ remove_profile = "プロファイルを削除"
 remove_profile_dialog = "プロファイルを削除…"
 select_device_button_description = "動作を変更するボタンをデバイス上で選択してください。"
 remove_profile_description = "このプロファイルのカスタムボタン割り当てを削除します。デフォルトの割り当てには影響しません。"
+search_applications_label = "Search applications"
 
 [pointer]
 mouse_button_profiles = "マウスボタンのプロファイル"
@@ -249,6 +259,9 @@ high_resolution_scrolling_description = "ラチェットの段間にある細か
 wheel_resolution_unsupported = "このデバイスはホイール解像度の制御に対応していません。"
 wheel_resolution_other_connection = "別の接続方式ではホイール解像度に対応していますが、現在の接続では利用できません。"
 smartshift = "SmartShift"
+dpi_value = "%{value} DPI"
+remove_dpi_preset = "Remove %{value} DPI preset"
+add_current_dpi_preset = "Add current DPI as preset"
 
 [actions]
 bind_control = "%{name} を割り当て"
@@ -337,6 +350,7 @@ type_text_action = "「%{text}」と入力"
 workflow_step_count_singular = "ワークフロー（1 ステップ）"
 workflow_step_count_plural = "ワークフロー（%{count} ステップ）"
 open_named_target = "%{name} を開く"
+search_actions_label = "Search actions"
 
 [pairing]
 add_device = "デバイスを追加"
@@ -491,6 +505,7 @@ color_theme = "カラーテーマ"
 app_icon = "アプリアイコン"
 app_icon_description = "Dock、Finder、Launchpad に表示される OpenLogi のアイコンを選びます。"
 interface_language = "インターフェースの言語"
+search_themes = "Search themes"
 
 [diagnostics]
 diagnostics = "診断"
@@ -524,12 +539,24 @@ image = "画像"
 streaming = "配信"
 video_call = "ビデオ通話"
 camera_preview_platform_unavailable = "ライブプレビューはこのプラットフォームではまだ利用できません。"
+auto_control = "Auto %{control}"
 
 [lighting]
 colour_temperature = "色温度"
 applying_light_setting = "ライト設定を適用中…"
 auto_on_with_camera = "カメラ使用時に自動点灯"
 camera_light_auto_description = "いずれかのカメラを使用している間はライトを点灯し、すべてのカメラが停止すると消灯します。"
+power = "Power"
+color = "色"
+color_red = "Red"
+color_orange = "Orange"
+color_yellow = "Yellow"
+color_green = "Green"
+color_teal = "Teal"
+color_blue = "Blue"
+color_indigo = "Indigo"
+color_purple = "Purple"
+color_white = "White"
 
 [action_ring]
 actions_ring = "アクションリング"
@@ -560,6 +587,16 @@ custom_shortcut = "カスタムショートカット"
 shortcut_e_g_cmd_plus_shift_plus_p = "ショートカット（例：Cmd+Shift+P）"
 application_folder_path_or_url = "アプリ、フォルダのパス、またはURL"
 open_application_or_folder = "アプリまたはフォルダを開く"
+add_shortcut = "Add shortcut"
+add_application = "Add application"
+slot_top = "Top"
+slot_top_right = "Top right"
+slot_right = "Right"
+slot_bottom_right = "Bottom right"
+slot_bottom = "Bottom"
+slot_bottom_left = "Bottom left"
+slot_left = "Left"
+slot_top_left = "Top left"
 
 [keyboard]
 editor_unavailable = "エディターを利用できません"
@@ -573,3 +610,4 @@ play_pause_key = "再生／一時停止キー"
 mute_key = "消音キー"
 volume_down_key = "音量を下げるキー"
 volume_up_key = "音量を上げるキー"
+remove_workflow_step = "Remove step %{number}: %{step}"

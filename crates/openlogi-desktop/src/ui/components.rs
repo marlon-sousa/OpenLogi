@@ -38,8 +38,86 @@ pub(crate) fn control_button(id: impl Into<ElementId>) -> gpui_component::button
 
 /// A single-line input at the house control height; see [`control_button`].
 /// Pins via `min_h` because the inherent `Input::h` is multi-line-only.
-pub(crate) fn control_input(state: &Entity<InputState>) -> Input {
-    Input::new(state).small().min_h(px(theme::CONTROL_H))
+///
+/// `label` is the accessible name ("Device name"). The placeholder stays a
+/// hint: it is only read while the field is empty, and a screen reader user
+/// who returns to a filled field would otherwise hear no name at all.
+pub(crate) fn control_input(state: &Entity<InputState>, label: impl Into<SharedString>) -> Input {
+    Input::new(state)
+        .aria_label(label)
+        .small()
+        .min_h(px(theme::CONTROL_H))
+}
+
+/// A status readout a screen reader can reach ("Connected", "Battery 90 %").
+///
+/// GPUI puts plain text in the accessibility tree only when it has an id, so
+/// status that is not on a control is invisible to assistive technology until
+/// it goes through this. `text` is what is read; the caller adds the visuals.
+pub(crate) fn readout(
+    id: impl Into<ElementId>,
+    text: impl Into<SharedString>,
+) -> Stateful<gpui::Div> {
+    div().id(id).role(Role::Label).aria_value(text)
+}
+
+/// A named container for a set of choices ("Wheel resolution"). gpui-kit's
+/// `ButtonGroup` exposes no group of its own, so its buttons ("Standard",
+/// "High resolution") would otherwise be read without the question they answer.
+pub(crate) fn control_group(
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+) -> Stateful<gpui::Div> {
+    div().id(id).role(Role::Group).aria_label(label)
+}
+
+/// One choice among several ("Free spin" / "Ratchet"): a radio button that
+/// reads "checked" when it is the current one. Windows reports a button's
+/// `selected` to no one, so a choice has to carry its state as checked. Put
+/// the choices in a [`control_group`] named for the question they answer.
+pub(crate) fn choice_button(
+    button: gpui_component::button::Button,
+    selected: bool,
+) -> gpui_component::button::Button {
+    button
+        .role(Role::RadioButton)
+        .toggled(selected)
+        .selected(selected)
+}
+
+/// A screen title or section title, listed among a screen reader's headings.
+/// `level` 1 is the screen's own title; 2 a section of it.
+pub(crate) fn heading(
+    id: impl Into<ElementId>,
+    level: usize,
+    text: impl Into<SharedString>,
+) -> Stateful<gpui::Div> {
+    div()
+        .id(id)
+        .role(Role::Heading)
+        .aria_level(level)
+        .aria_label(text)
+}
+
+/// An icon-only button. `label` is required: it is the accessible name and the
+/// hover tooltip, so the name a screen reader reads is the one a pointer user
+/// sees. Callers pick the variant and size.
+pub(crate) fn icon_button(
+    id: impl Into<ElementId>,
+    icon: impl Into<Icon>,
+    label: impl Into<SharedString>,
+) -> gpui_component::button::Button {
+    let label = label.into();
+    gpui_component::button::Button::new(id)
+        .icon(icon)
+        .accessibility_label(label.clone())
+        .tooltip(label)
+}
+
+/// A bare on/off switch named for the setting it controls; its caption is
+/// rendered by the caller beside it.
+pub(crate) fn control_switch(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Switch {
+    Switch::new(id).accessibility_label(label)
 }
 
 /// Re-derive an input's placeholder from the current locale.
@@ -71,6 +149,7 @@ pub(crate) fn control_select<D: SearchableListDelegate + 'static>(
 #[derive(IntoElement)]
 pub(crate) struct Toggle {
     id: ElementId,
+    name: SharedString,
     selected: bool,
     disabled: bool,
     size: Size,
@@ -83,9 +162,12 @@ pub(crate) struct Toggle {
 type SwitchHandler = std::rc::Rc<dyn Fn(&bool, &mut Window, &mut App)>;
 
 impl Toggle {
-    pub(crate) fn new(id: impl Into<ElementId>) -> Self {
+    /// `name` is the setting the switch controls ("Lighting"); it is the
+    /// accessible name, while the visible caption shows the state.
+    pub(crate) fn new(id: impl Into<ElementId>, name: impl Into<SharedString>) -> Self {
         Self {
             id: id.into(),
+            name: name.into(),
             selected: false,
             disabled: false,
             size: Size::Small,
@@ -159,6 +241,7 @@ impl RenderOnce for Toggle {
             }
         });
         let mut toggle = Switch::new(self.id)
+            .accessibility_label(self.name)
             .checked(self.selected)
             .disabled(self.disabled)
             .with_size(self.size)
@@ -245,15 +328,20 @@ type ClickHandler = std::rc::Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 #[derive(IntoElement)]
 pub(crate) struct MenuRow {
     base: BaseButton,
+    role: Role,
     selected: bool,
     children: Vec<AnyElement>,
     on_click: Option<ClickHandler>,
 }
 
 impl MenuRow {
-    pub(crate) fn new(id: impl Into<ElementId>) -> Self {
+    /// `label` is the row's accessible name. Children are visual only, so a
+    /// row whose content is an icon, a value or a step summary still says
+    /// what choosing it does.
+    pub(crate) fn new(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Self {
         Self {
-            base: BaseButton::new(id),
+            base: BaseButton::new(id).accessibility_label(label),
+            role: Role::Button,
             selected: false,
             children: Vec::new(),
             on_click: None,
@@ -263,7 +351,16 @@ impl MenuRow {
     /// Set the accessibility role for this row's semantic button.
     #[must_use]
     pub(crate) fn role(mut self, role: Role) -> Self {
+        self.role = role;
         self.base = self.base.role(role);
+        self
+    }
+
+    /// Track `handle` instead of the row's own keyed focus, so its list can
+    /// move focus onto this row (the current choice, when a panel opens).
+    #[must_use]
+    pub(crate) fn track_focus(mut self, handle: &gpui::FocusHandle) -> Self {
+        self.base = self.base.track_focus(handle);
         self
     }
 
@@ -306,9 +403,31 @@ impl RenderOnce for MenuRow {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let pal = theme::palette(cx);
         let selected = self.selected;
-        self.base
-            .selected(selected)
-            .aria_selected(selected)
+        // A choice among rows says whether it is the current one. Windows
+        // reports that as "checked" for radio roles and ignores "selected"
+        // on menu items and buttons, so a choice row carries it as toggled.
+        let base = if matches!(self.role, Role::MenuItemRadio | Role::RadioButton) {
+            self.base.aria_toggled(if selected {
+                gpui::accesskit::Toggled::True
+            } else {
+                gpui::accesskit::Toggled::False
+            })
+        } else {
+            self.base.aria_selected(selected)
+        };
+        base.selected(selected)
+            // Rows form a list: Up and Down walk it as Shift+Tab and Tab do.
+            .on_key_down(|event: &gpui::KeyDownEvent, window, cx| {
+                if event.keystroke.modifiers.modified() {
+                    return;
+                }
+                match event.keystroke.key.as_str() {
+                    "down" => window.focus_next(cx),
+                    "up" => window.focus_prev(cx),
+                    _ => return,
+                }
+                cx.stop_propagation();
+            })
             .w_full()
             .flex()
             .items_center()
@@ -554,6 +673,10 @@ impl RenderOnce for PresetChip {
             .children(self.children)
     }
 }
+
+mod control;
+
+pub(crate) use control::{ControlCallout, ControlTarget};
 
 #[cfg(test)]
 mod tests;

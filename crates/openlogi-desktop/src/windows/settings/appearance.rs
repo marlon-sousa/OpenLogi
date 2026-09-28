@@ -13,7 +13,7 @@ use super::{
 };
 use crate::platform::app_icon::AppIconExt as _;
 use crate::ui::choice_card::ChoiceCard;
-use crate::ui::components::control_input;
+use crate::ui::components::{control_group, control_input};
 use crate::ui::theme::Typography as _;
 
 /// The Appearance page: light/dark mode, the theme grid, corner radius, and the
@@ -67,14 +67,20 @@ pub(super) fn appearance_page(
             // wide thumbnail/grid controls which stack below.
             SettingItem::new(
                 tr!("appearance.corner_radius"),
-                SettingField::render(move |_, _, cx| radius_segment(cx)),
+                SettingField::render(move |_, _, cx| {
+                    control_group("corner-radius-group", tr!("appearance.corner_radius"))
+                        .child(radius_segment(cx))
+                }),
             )
             .description(tr!("appearance.roundness_of_buttons_cards_and_controls")),
         )
         .item(
             SettingItem::new(
                 tr!("appearance.interface_scale"),
-                SettingField::render(move |_, _, cx| scale_segment(cx)),
+                SettingField::render(move |_, _, cx| {
+                    control_group("interface-scale-group", tr!("appearance.interface_scale"))
+                        .child(scale_segment(cx))
+                }),
             )
             .description(tr!("appearance.scale_text_and_interface_spacing")),
         );
@@ -509,7 +515,7 @@ fn theme_picker(
                 )
                 .child(
                     div().w(px(200.)).flex_shrink_0().child(
-                        control_input(theme_search)
+                        control_input(theme_search, tr!("appearance.search_themes"))
                             .cleanable(true)
                             .prefix(IconName::Search),
                     ),
@@ -552,7 +558,12 @@ fn theme_card(
 ) -> impl IntoElement {
     let dark = mode.is_dark();
     let stored = name.clone();
-    ChoiceCard::new((ElementId::from("theme"), name.clone()), name.clone())
+    let accessible_name = tr!(
+        "common.name_with_detail",
+        name => name.clone(),
+        detail => if dark { tr!("appearance.dark") } else { tr!("common.light") }
+    );
+    ChoiceCard::new((ElementId::from("theme"), name.clone()), accessible_name)
         .selected(selected)
         .w(px(132.))
         .p(px(8.))

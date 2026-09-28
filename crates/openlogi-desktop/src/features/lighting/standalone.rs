@@ -10,7 +10,7 @@ use gpui::{
     BoxShadow, Context, Hsla, IntoElement, ParentElement, Render, Styled, Subscription, Window,
     div, hsla, point, prelude::FluentBuilder as _, px, rgb,
 };
-use gpui_component::{Icon, IconName, Selectable as _, h_flex, slider::Slider, v_flex};
+use gpui_component::{Icon, IconName, Selectable as _, h_flex, v_flex};
 use openlogi_core::{
     config::LightSettings,
     device::{LightCapabilities, LightValueRange, LightValueUnit},
@@ -184,26 +184,30 @@ impl Render for LightPanel {
                 panel.child(div().h(px(1.)).w_full().bg(pal.border.opacity(0.55)))
             })
             .when_some(brightness, |panel, LightSlider { range, slider }| {
+                let title = tr!("camera.brightness");
+                let value = format_light_value(
+                    slider.shown(brightness_native(*range, settings)),
+                    range.unit(),
+                );
                 panel.child(control_well(
-                    tr!("camera.brightness"),
-                    format_light_value(
-                        slider.shown(brightness_native(*range, settings)),
-                        range.unit(),
-                    ),
+                    title.clone(),
+                    value.clone(),
                     format_range_endpoints(*range),
-                    Slider::new(slider.slider()).horizontal(),
+                    slider.control(title).value_text(value),
                     pal,
                 ))
             })
             .when_some(temperature, |panel, LightSlider { range, slider }| {
+                let title = tr!("lighting.colour_temperature");
+                let value = format_light_value(
+                    slider.shown(temperature_native(*range, settings)),
+                    range.unit(),
+                );
                 panel.child(control_well(
-                    tr!("lighting.colour_temperature"),
-                    format_light_value(
-                        slider.shown(temperature_native(*range, settings)),
-                        range.unit(),
-                    ),
+                    title.clone(),
+                    value.clone(),
                     format_range_endpoints(*range),
-                    Slider::new(slider.slider()).horizontal(),
+                    slider.control(title).value_text(value),
                     pal,
                 ))
             })
@@ -237,7 +241,7 @@ fn light_hero(device_name: &str, view: LightView, pal: Palette) -> impl IntoElem
                 )),
         )
         .child(
-            Toggle::new("standalone-light-toggle")
+            Toggle::new("standalone-light-toggle", tr!("lighting.power"))
                 .selected(effective_enabled)
                 .icon(if effective_enabled {
                     IconName::Sun
@@ -326,16 +330,19 @@ fn camera_automation(current: LightSettings, pal: Palette) -> impl IntoElement {
                 ),
         )
         .child(
-            Toggle::new("standalone-light-camera-automation")
-                .selected(current.auto_camera)
-                .min_width(px(72.))
-                .on_change(|auto_camera, _window, cx| {
-                    AppState::apply(cx, |state| {
-                        let mut light = state.light();
-                        light.auto_camera = *auto_camera;
-                        state.commit_light(light)
-                    });
-                }),
+            Toggle::new(
+                "standalone-light-camera-automation",
+                tr!("lighting.auto_on_with_camera"),
+            )
+            .selected(current.auto_camera)
+            .min_width(px(72.))
+            .on_change(|auto_camera, _window, cx| {
+                AppState::apply(cx, |state| {
+                    let mut light = state.light();
+                    light.auto_camera = *auto_camera;
+                    state.commit_light(light)
+                });
+            }),
         )
 }
 

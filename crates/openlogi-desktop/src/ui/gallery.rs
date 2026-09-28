@@ -11,7 +11,6 @@ use gpui_component::{
     button::{Button, ButtonVariants as _},
     h_flex,
     scroll::ScrollableElement as _,
-    slider::Slider,
     v_flex,
 };
 use openlogi_core::brand::APP_ID;
@@ -22,7 +21,10 @@ use super::battery::BatteryIndicator;
 use super::carousel::Carousel;
 use super::choice_card::ChoiceCard;
 use super::commit_slider::{CommitSlider, SliderRange};
-use super::components::{MenuRow, PanelCard, PresetChip, ProfileTab, Toggle};
+use super::components::{
+    ControlCallout, ControlTarget, MenuRow, PanelCard, PresetChip, ProfileTab, Toggle,
+    control_switch, icon_button, readout,
+};
 use super::theme::{self, ContentWidth, OPENLOGI_DARK, OPENLOGI_LIGHT, Palette, Typography as _};
 
 const TITLE: &str = "OpenLogi Component Gallery";
@@ -98,6 +100,7 @@ struct ComponentGallery {
     carousel_selected: usize,
     slider: CommitSlider<u8>,
     slider_committed: u8,
+    control_selected: bool,
 }
 
 impl ComponentGallery {
@@ -120,6 +123,7 @@ impl ComponentGallery {
             carousel_selected: 1,
             slider,
             slider_committed,
+            control_selected: false,
         }
     }
 
@@ -199,6 +203,7 @@ impl ComponentGallery {
             .child(self.menu_panel(pal, cx))
             .child(self.profile_panel(pal, cx))
             .child(self.preset_panel(pal, cx))
+            .child(self.control_panel(pal, cx))
             .child(self.slider_panel(pal))
             .child(Self::battery_panel(pal))
     }
@@ -253,7 +258,7 @@ impl ComponentGallery {
             v_flex()
                 .gap_3()
                 .child(
-                    Toggle::new("gallery-toggle")
+                    Toggle::new("gallery-toggle", "Gallery setting")
                         .selected(self.toggle_selected)
                         .label(Some(SharedString::from(label)))
                         .on_change(cx.listener(|this, selected: &bool, _, cx| {
@@ -262,7 +267,7 @@ impl ComponentGallery {
                         })),
                 )
                 .child(
-                    Toggle::new("gallery-toggle-disabled")
+                    Toggle::new("gallery-toggle-disabled", "Unavailable setting")
                         .selected(true)
                         .label(Some(SharedString::from("Unavailable")))
                         .disabled(true),
@@ -278,7 +283,7 @@ impl ComponentGallery {
             v_flex()
                 .gap_1()
                 .child(
-                    MenuRow::new("gallery-menu-primary")
+                    MenuRow::new("gallery-menu-primary", "Primary action")
                         .role(Role::MenuItem)
                         .selected(self.menu_selected == 0)
                         .child("Primary action")
@@ -289,7 +294,7 @@ impl ComponentGallery {
                         })),
                 )
                 .child(
-                    MenuRow::new("gallery-menu-secondary")
+                    MenuRow::new("gallery-menu-secondary", "Secondary action")
                         .role(Role::MenuItem)
                         .selected(self.menu_selected == 1)
                         .child("Secondary action")
@@ -358,13 +363,84 @@ impl ComponentGallery {
         )
     }
 
+    /// The device-photo pair and the small named controls: a callout that
+    /// owns the tab stop with its pointer-only target, a standalone target,
+    /// an icon button, a named switch, and a status readout.
+    fn control_panel(&self, pal: Palette, cx: &mut Context<Self>) -> gpui::Div {
+        let selected = self.control_selected;
+        gallery_panel(
+            "Device controls",
+            IconName::Settings,
+            v_flex()
+                .gap_3()
+                .child(
+                    h_flex()
+                        .gap_3()
+                        .items_center()
+                        .child(
+                            ControlCallout::new("gallery-callout", "F1")
+                                .binding("Brightness down")
+                                .selected(selected)
+                                .expanded(selected)
+                                .w(px(88.))
+                                .h(px(34.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .text_caption()
+                                .child("F1 · Brightness down")
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.control_selected = !this.control_selected;
+                                    cx.notify();
+                                })),
+                        )
+                        .child(
+                            ControlTarget::new("gallery-callout-target", "F1")
+                                .pointer_only(true)
+                                .selected(selected)
+                                .size(px(18.))
+                                .rounded_full()
+                                .border_1()
+                                .border_color(pal.border)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.control_selected = !this.control_selected;
+                                    cx.notify();
+                                })),
+                        )
+                        .child(
+                            ControlTarget::new("gallery-target", "Middle button")
+                                .size(px(18.))
+                                .rounded_full()
+                                .bg(pal.text_muted),
+                        ),
+                )
+                .child(
+                    h_flex()
+                        .gap_3()
+                        .items_center()
+                        .child(
+                            icon_button("gallery-icon-button", IconName::Close, "Remove preset")
+                                .ghost(),
+                        )
+                        .child(control_switch("gallery-switch", "Lighting").checked(true))
+                        .child(
+                            readout("gallery-readout", "Connected")
+                                .text_caption()
+                                .text_color(pal.text_muted)
+                                .child("Connected"),
+                        ),
+                ),
+            pal,
+        )
+    }
+
     fn slider_panel(&self, pal: Palette) -> gpui::Div {
         gallery_panel(
             "CommitSlider",
             IconName::Sun,
             v_flex()
                 .gap_2()
-                .child(Slider::new(self.slider.slider()).horizontal())
+                .child(self.slider.control("Brightness"))
                 .child(
                     div()
                         .text_caption()

@@ -26,7 +26,7 @@ pub(super) use gpui_component::{
     input::{InputEvent, InputState},
     select::{SelectEvent, SelectItem, SelectState},
     setting::{SelectIndex, SettingField, SettingGroup, SettingItem, SettingPage, Settings},
-    slider::{Slider, SliderState},
+    slider::SliderState,
     tag::Tag,
     theme::ThemeConfig,
     v_flex,
@@ -41,6 +41,8 @@ pub(super) use crate::app::menu::{CloseWindow, Minimize, Zoom};
 pub(super) use crate::services::assets::sync::{AssetCommand, AssetControl};
 pub(super) use crate::state::{AppState, StateEvent};
 use crate::ui::commit_slider::{CommitSlider, SliderRange};
+use crate::ui::components::control_switch;
+use crate::ui::focus::keep_focus_on_root;
 pub(super) use crate::ui::theme::{self, Palette};
 #[cfg(target_os = "macos")]
 pub(super) use openlogi_permissions::Permission;
@@ -64,6 +66,31 @@ mod language;
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 mod permissions;
 mod updates;
+
+/// A setting row whose switch is named by the row's own title.
+///
+/// gpui-kit's `SettingField::switch` renders an unnamed switch, which a screen
+/// reader announces as a bare "switch, on" with nothing to say what it
+/// changes; every settings switch is built here instead.
+fn switch_item(
+    title: SharedString,
+    value: impl Fn(&App) -> bool + 'static,
+    set_value: impl Fn(bool, &mut App) + 'static,
+) -> SettingItem {
+    let name = title.clone();
+    let set_value = std::rc::Rc::new(set_value);
+    SettingItem::new(
+        title,
+        SettingField::render(move |options, _, cx| {
+            let set_value = set_value.clone();
+            control_switch("setting-switch", name.clone())
+                .checked(value(cx))
+                .disabled(options.is_disabled())
+                .with_size(options.size())
+                .on_click(move |checked, _, cx| set_value(*checked, cx))
+        }),
+    )
+}
 
 /// Which sidebar page the window opens to. Maps to the page order in
 /// [`SettingsView::render`]; menu items deep-link here (About / Updates).
@@ -106,6 +133,8 @@ pub(super) enum ThemeFilter {
 /// Standalone Settings window root view.
 pub struct SettingsView {
     focus_handle: FocusHandle,
+    /// Returns focus to the root when the focused control disappears.
+    _keep_focus: Subscription,
     appearance_obs: Option<Subscription>,
     /// Refreshes host-owned snapshots when Settings becomes active again.
     _activation_obs: Subscription,
@@ -155,9 +184,14 @@ pub struct SettingsView {
 }
 
 impl SettingsView {
-    fn new(initial_page: SettingsPage, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub(crate) fn new(
+        initial_page: SettingsPage,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let focus_handle = cx.focus_handle();
         focus_handle.focus(window, cx);
+        let keep_focus = keep_focus_on_root(window, cx, focus_handle.clone());
         // Reuse the app-wide shared updater installed at launch, so a launch-time
         // check result is already visible. Fall back to a fresh one if it somehow
         // wasn't installed.
@@ -251,6 +285,7 @@ impl SettingsView {
 
         Self {
             focus_handle,
+            _keep_focus: keep_focus,
             appearance_obs: None,
             _activation_obs: activation_obs,
             _state_obs: state_obs,

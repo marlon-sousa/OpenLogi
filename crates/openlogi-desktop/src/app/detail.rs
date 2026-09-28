@@ -2,7 +2,7 @@
 //! section bodies (Buttons, Keys, Pointer, Lighting, Camera, Device).
 
 use gpui::{
-    Context, InteractiveElement, IntoElement, ParentElement, Rems, Role,
+    Context, InteractiveElement, IntoElement, KeyDownEvent, ParentElement, Rems, Role,
     StatefulInteractiveElement as _, Styled, div, prelude::FluentBuilder as _, px, rems,
 };
 use gpui_base::Button as BaseButton;
@@ -12,7 +12,6 @@ use gpui_component::{
     description_list::{DescriptionItem, DescriptionList},
     h_flex,
     scroll::ScrollableElement as _,
-    switch::Switch,
     v_flex,
 };
 use openlogi_core::config::ScrollResolution;
@@ -36,8 +35,9 @@ use crate::features::profiles::{
     AppCatalogPicker, ProfileIconCache, action_ring_profile_scope_bar, button_profile_scope_bar,
 };
 use crate::state::{AppState, DeviceRecord, StateEvents};
-use crate::ui::battery::BatteryIndicator;
-use crate::ui::components::{PanelCard, Toggle};
+use crate::ui::battery::{BatteryIndicator, glance_hint};
+use crate::ui::components::{PanelCard, Toggle, control_group, control_switch, heading, readout};
+use crate::ui::focus::{FocusTargets, tab_list_step};
 use crate::ui::theme::{
     self, ContentWidth, DETAIL_RAIL_W, HEADER_H, Palette, SCREEN_PAD, Typography as _,
 };
@@ -61,9 +61,13 @@ pub(super) fn detail_header(
         |r| r.display_name.clone(),
     );
     let online = record.map(|r| r.online);
-    let battery = record
-        .and_then(|r| r.battery.as_ref())
-        .map(BatteryIndicator::inline);
+    let battery = record.and_then(|r| {
+        let battery = r.battery.as_ref()?;
+        Some(
+            readout("device-battery", glance_hint(battery, r.online))
+                .child(BatteryIndicator::inline(battery)),
+        )
+    });
     h_flex()
         .h(px(HEADER_H))
         .flex_shrink_0()
@@ -75,7 +79,7 @@ pub(super) fn detail_header(
         .border_color(pal.border)
         .child(back_button(cx))
         .child(
-            div()
+            heading("device-title", 1, name.clone())
                 .min_w_0()
                 .max_w(px(220.))
                 .truncate()
@@ -105,6 +109,7 @@ pub(super) struct DetailPanels<'a> {
 /// device's tab set.
 pub(super) fn detail_content(
     panels: &DetailPanels<'_>,
+    section_focus: &mut FocusTargets<DetailTab>,
     profile_icons: &ProfileIconCache,
     app_catalog: &gpui::Entity<AppCatalogPicker>,
     tabs: &[DetailTab],
@@ -133,7 +138,7 @@ pub(super) fn detail_content(
         DetailTab::Light => light_tab(panels.light_panel, cx).into_any_element(),
         DetailTab::Device => device_tab(cx).into_any_element(),
     };
-    let navigation = detail_navigation(tabs, active, cx);
+    let navigation = detail_navigation(tabs, active, section_focus, cx);
     v_flex()
         .flex_1()
         .min_h_0()
@@ -174,10 +179,34 @@ pub(super) fn detail_content(
 fn detail_navigation(
     tabs: &[DetailTab],
     active: DetailTab,
+    section_focus: &mut FocusTargets<DetailTab>,
     cx: &mut Context<AppView>,
 ) -> impl IntoElement {
     let pal = theme::palette(cx);
+    let focus: Vec<_> = tabs
+        .iter()
+        .map(|tab| section_focus.handle(tab, cx))
+        .collect();
+    let current = tabs.iter().position(|&tab| tab == active).unwrap_or(0);
+    let on_key_down = {
+        let tabs = tabs.to_vec();
+        let focus = focus.clone();
+        cx.listener(move |this, event: &KeyDownEvent, window, cx| {
+            let Some(next) = tab_list_step(&event.keystroke, current, tabs.len()) else {
+                return;
+            };
+            cx.stop_propagation();
+            this.active_tab = tabs[next];
+            focus[next].focus(window, cx);
+            cx.notify();
+        })
+    };
     v_flex()
+        .id("detail-sections")
+        .role(Role::TabList)
+        .aria_label(tr!("device.device_sections"))
+        .aria_orientation(gpui::Orientation::Vertical)
+        .on_key_down(on_key_down)
         .w(px(DETAIL_RAIL_W))
         .h_full()
         .flex_shrink_0()
@@ -189,6 +218,9 @@ fn detail_navigation(
         .children(tabs.iter().copied().enumerate().map(|(index, tab)| {
             let selected = tab == active;
             BaseButton::new(("detail-navigation", index))
+                .track_focus(&focus[index])
+                // One Tab stop for the whole list; the arrows reach the rest.
+                .tab_stop(selected)
                 .role(Role::Tab)
                 .selected(selected)
                 .accessibility_label(tab.label())
@@ -429,13 +461,16 @@ fn scrolling_card(pal: Palette, cx: &mut Context<AppView>) -> impl IntoElement {
                 ),
         )
         .child(
-            Toggle::new("invert-scroll-toggle")
-                .selected(inverted)
-                .disabled(!inversion_supported)
-                .label((!inversion_supported).then(|| tr!("common.unavailable")))
-                .on_change(|inverted, _window, cx| {
-                    AppState::apply(cx, |state| state.commit_invert_scroll(*inverted));
-                }),
+            Toggle::new(
+                "invert-scroll-toggle",
+                tr!("pointer.invert_scroll_direction"),
+            )
+            .selected(inverted)
+            .disabled(!inversion_supported)
+            .label((!inversion_supported).then(|| tr!("common.unavailable")))
+            .on_change(|inverted, _window, cx| {
+                AppState::apply(cx, |state| state.commit_invert_scroll(*inverted));
+            }),
         );
     let resolution_description = match hires {
         HiresWheel::Here => match resolution {
@@ -467,10 +502,14 @@ fn scrolling_card(pal: Palette, cx: &mut Context<AppView>) -> impl IntoElement {
                         .child(resolution_description),
                 ),
         )
-        .child(wheel_resolution_control(
-            resolution,
-            hires == HiresWheel::Here,
-        ));
+        .child(
+            control_group("wheel-resolution-group", tr!("pointer.wheel_resolution"))
+                .w_full()
+                .child(wheel_resolution_control(
+                    resolution,
+                    hires == HiresWheel::Here,
+                )),
+        );
     PanelCard::new(
         tr!("pointer.scrolling"),
         Icon::empty().path("action-icons/mouse.svg"),
@@ -718,7 +757,7 @@ fn configuration_card(pal: Palette, cx: &mut Context<AppView>) -> impl IntoEleme
                         ),
                 )
                 .child(
-                    Switch::new("device-enabled")
+                    control_switch("device-enabled", tr!("device.manage_this_device"))
                         .checked(device_enabled)
                         .on_click(|checked, _window, cx| {
                             let enabled = *checked;

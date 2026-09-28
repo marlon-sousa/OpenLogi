@@ -50,6 +50,10 @@ preset = "Набор налад"
 remove_named_item = "Выдаліць %{name}"
 enable = "Уключыць"
 not_now = "Не зараз"
+name_value = "%{name}: %{value}"
+previous = "Previous"
+next = "Next"
+name_with_detail = "%{name} (%{detail})"
 
 [app]
 open_openlogi = "Адкрыць OpenLogi"
@@ -131,6 +135,11 @@ quit_logi_options_hid_access = "Карыстаецеся Logi Options+? Спач
 device = "Прылада"
 manage_this_device = "Кіраваць гэтай прыладай"
 usb = "USB"
+device_sections = "Device sections"
+device_name = "Device name"
+previous_device = "Previous device"
+next_device = "Next device"
+device_options = "Device options for %{name}"
 
 [profiles]
 remove_all_profiles = "Delete all app settings"
@@ -179,6 +188,7 @@ remove_profile = "Выдаліць профіль"
 remove_profile_dialog = "Выдаліць профіль…"
 select_device_button_description = "Выберыце кнопку на прыладзе, каб змяніць яе дзеянне."
 remove_profile_description = "Гэта выдаляе карыстальніцкія прывязкі кнопак у гэтым профілі. Прадвызначаныя прывязкі застаюцца ў сіле."
+search_applications_label = "Search applications"
 
 [pointer]
 mouse_button_profiles = "Профілі кнопак мышы"
@@ -249,6 +259,9 @@ high_resolution_scrolling_description = "Выяўляе драбнейшыя р�
 wheel_resolution_unsupported = "Гэта прылада не падтрымлівае кіраванне раздзяляльнасцю кола."
 wheel_resolution_other_connection = "Гэта прылада падтрымлівае раздзяляльнасць кола на іншым падключэнні, але не на гэтым."
 smartshift = "SmartShift"
+dpi_value = "%{value} DPI"
+remove_dpi_preset = "Remove %{value} DPI preset"
+add_current_dpi_preset = "Add current DPI as preset"
 
 [actions]
 bind_control = "Прывязаць %{name}"
@@ -337,6 +350,7 @@ type_text_action = "Увесці «%{text}»"
 workflow_step_count_singular = "Сцэнар (1 крок)"
 workflow_step_count_plural = "Сцэнар (колькасць крокаў: %{count})"
 open_named_target = "Адкрыць %{name}"
+search_actions_label = "Search actions"
 
 [pairing]
 add_device = "Дадаць прыладу"
@@ -491,6 +505,7 @@ color_theme = "Каляровая тэма"
 app_icon = "Значок праграмы"
 app_icon_description = "Выберыце значок OpenLogi, які будзе адлюстроўвацца ў Dock, Finder і Launchpad."
 interface_language = "Мова інтэрфейсу"
+search_themes = "Search themes"
 
 [diagnostics]
 diagnostics = "Дыягностыка"
@@ -524,12 +539,24 @@ image = "Выява"
 streaming = "Трансляцыя"
 video_call = "Відэазванок"
 camera_preview_platform_unavailable = "Жывы прагляд яшчэ не даступны на гэтай платформе."
+auto_control = "Auto %{control}"
 
 [lighting]
 colour_temperature = "Тэмпература колеру"
 applying_light_setting = "Прымяненне налады святла…"
 auto_on_with_camera = "Аўтаўключэнне з камерай"
 camera_light_auto_description = "Уключайце гэта святло, пакуль выкарыстоўваецца якая-небудзь камера, і выключайце, калі камеры перастаюць працаваць."
+power = "Power"
+color = "Колер"
+color_red = "Red"
+color_orange = "Orange"
+color_yellow = "Yellow"
+color_green = "Green"
+color_teal = "Teal"
+color_blue = "Blue"
+color_indigo = "Indigo"
+color_purple = "Purple"
+color_white = "White"
 
 [action_ring]
 actions_ring = "Кола дзеянняў"
@@ -560,6 +587,16 @@ custom_shortcut = "Уласнае спалучэнне клавіш"
 shortcut_e_g_cmd_plus_shift_plus_p = "Спалучэнне, напр. Cmd+Shift+P"
 application_folder_path_or_url = "Праграма, шлях да папкі або URL"
 open_application_or_folder = "Адкрыць праграму або папку"
+add_shortcut = "Add shortcut"
+add_application = "Add application"
+slot_top = "Top"
+slot_top_right = "Top right"
+slot_right = "Right"
+slot_bottom_right = "Bottom right"
+slot_bottom = "Bottom"
+slot_bottom_left = "Bottom left"
+slot_left = "Left"
+slot_top_left = "Top left"
 
 [keyboard]
 editor_unavailable = "Рэдактар недаступны"
@@ -573,3 +610,4 @@ play_pause_key = "Клавіша прайгравання і паўзы"
 mute_key = "Клавіша выключэння гуку"
 volume_down_key = "Клавіша памяншэння гучнасці"
 volume_up_key = "Клавіша павелічэння гучнасці"
+remove_workflow_step = "Remove step %{number}: %{step}"

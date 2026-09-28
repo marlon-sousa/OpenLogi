@@ -118,7 +118,7 @@ fn add_app_content(
         .child(title(tr!("profiles.add_app_profile"), pal))
         .child(divider(pal))
         .child(
-            control_input(&search)
+            control_input(&search, tr!("profiles.search_applications_label"))
                 .cleanable(true)
                 .prefix(IconName::Search),
         )
@@ -223,6 +223,7 @@ fn applications_toggle(
 ) -> impl IntoElement {
     BaseButton::new(format!("{id_base}:all-applications-toggle"))
         .role(Role::Button)
+        .accessibility_label(tr!("profiles.all_applications"))
         .aria_expanded(expanded)
         .w_full()
         .flex()
@@ -293,33 +294,36 @@ fn application_row(
 ) -> gpui::Div {
     let app = choice.app.clone();
     div().h(px(APP_ROW_H)).child(
-        MenuRow::new(format!("{id_base}:catalog-app:{}", choice.app))
-            .role(Role::MenuItem)
-            .child(
-                h_flex()
-                    .min_w_0()
-                    .items_center()
-                    .gap_2()
-                    .child(application_mark(icon, &choice.name, ROW_ICON_EDGE, pal))
-                    .child(
-                        v_flex()
-                            .min_w_0()
-                            .child(div().truncate().text_body().child(choice.name))
-                            .child(
-                                div()
-                                    .truncate()
-                                    .text_caption()
-                                    .text_color(pal.text_muted)
-                                    .child(choice.app),
-                            ),
-                    ),
-            )
-            .on_click(move |_event, window, cx| {
-                actions.select(Some(app.clone()), cx);
-                if let Some(popover) = popover.upgrade() {
-                    popover.update(cx, |state, cx| state.dismiss(window, cx));
-                }
-            }),
+        MenuRow::new(
+            format!("{id_base}:catalog-app:{}", choice.app),
+            choice.name.clone(),
+        )
+        .role(Role::MenuItem)
+        .child(
+            h_flex()
+                .min_w_0()
+                .items_center()
+                .gap_2()
+                .child(application_mark(icon, &choice.name, ROW_ICON_EDGE, pal))
+                .child(
+                    v_flex()
+                        .min_w_0()
+                        .child(div().truncate().text_body().child(choice.name))
+                        .child(
+                            div()
+                                .truncate()
+                                .text_caption()
+                                .text_color(pal.text_muted)
+                                .child(choice.app),
+                        ),
+                ),
+        )
+        .on_click(move |_event, window, cx| {
+            actions.select(Some(app.clone()), cx);
+            if let Some(popover) = popover.upgrade() {
+                popover.update(cx, |state, cx| state.dismiss(window, cx));
+            }
+        }),
     )
 }
 
@@ -390,11 +394,14 @@ mod tests {
                                             .h(px(APP_ROW_H))
                                             .debug_selector(move || format!("app-row-{index}"))
                                             .child(
-                                                MenuRow::new(("catalog-app", index))
-                                                    .child(format!("App {index}"))
-                                                    .on_click(move |_, _, _| {
-                                                        clicked.replace(Some(index));
-                                                    }),
+                                                MenuRow::new(
+                                                    ("catalog-app", index),
+                                                    format!("App {index}"),
+                                                )
+                                                .child(format!("App {index}"))
+                                                .on_click(move |_, _, _| {
+                                                    clicked.replace(Some(index));
+                                                }),
                                             )
                                     })
                                     .collect::<Vec<_>>()

@@ -5,8 +5,8 @@ mod editor;
 
 use gpui::{
     App, AppContext as _, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement,
-    ParentElement, Render, ScrollHandle, SharedString, StatefulInteractiveElement as _, Styled,
-    Subscription, Window, div, prelude::FluentBuilder as _, px, rgb, svg,
+    ParentElement, Render, Role, ScrollHandle, SharedString, StatefulInteractiveElement as _,
+    Styled, Subscription, Window, div, prelude::FluentBuilder as _, px, rgb, svg,
 };
 use gpui_base::Button as BaseButton;
 use gpui_component::{
@@ -130,6 +130,7 @@ impl Render for ActionRingPanel {
                     )
                     .child(toggle_button(
                         "ring-enabled",
+                        tr!("action_ring.actions_ring"),
                         ring.enabled,
                         AppState::commit_action_ring_enabled,
                     )),
@@ -152,6 +153,7 @@ impl Render for ActionRingPanel {
                         )
                         .child(toggle_button(
                             "ring-haptics",
+                            tr!("action_ring.haptic_feedback"),
                             ring.haptics,
                             AppState::commit_action_ring_haptics,
                         )),
@@ -208,11 +210,13 @@ fn current_device_supports_haptics(cx: &Context<ActionRingPanel>) -> bool {
 
 fn toggle_button(
     id: &'static str,
+    name: gpui::SharedString,
     enabled: bool,
     commit: impl Fn(&mut AppState, bool) -> StateEvents + 'static,
 ) -> Button {
     Button::new(id)
         .compact()
+        .accessibility_label(name)
         .label(if enabled {
             tr!("common.on")
         } else {
@@ -291,10 +295,21 @@ fn slot_button(
             ActionRingIcon::asset_path,
         )
     });
-    let accessible_label = label.clone();
+    let accessible_label = tr!(
+        "common.name_value",
+        name => slot_position_label(slot),
+        value => label.clone()
+    );
     let selected_view = view.clone();
 
     BaseButton::new(("action-ring-slot", index))
+        // The slot being edited: one choice of eight, read as checked.
+        .role(Role::RadioButton)
+        .aria_toggled(if selected {
+            gpui::accesskit::Toggled::True
+        } else {
+            gpui::accesskit::Toggled::False
+        })
         .selected(selected)
         .absolute()
         .left(px(left))
@@ -355,4 +370,18 @@ fn slot_button(
                 cx.notify();
             });
         })
+}
+
+/// Where a slot sits on the ring, as a person says it ("Top right").
+fn slot_position_label(slot: ActionRingSlot) -> gpui::SharedString {
+    match slot {
+        ActionRingSlot::Top => tr!("action_ring.slot_top"),
+        ActionRingSlot::TopRight => tr!("action_ring.slot_top_right"),
+        ActionRingSlot::Right => tr!("action_ring.slot_right"),
+        ActionRingSlot::BottomRight => tr!("action_ring.slot_bottom_right"),
+        ActionRingSlot::Bottom => tr!("action_ring.slot_bottom"),
+        ActionRingSlot::BottomLeft => tr!("action_ring.slot_bottom_left"),
+        ActionRingSlot::Left => tr!("action_ring.slot_left"),
+        ActionRingSlot::TopLeft => tr!("action_ring.slot_top_left"),
+    }
 }

@@ -1,10 +1,12 @@
 //! General settings page.
 
+use super::switch_item;
 use super::{
     App, AppState, Entity, FluentBuilder, IconName, InteractiveElement, ParentElement,
-    SettingField, SettingGroup, SettingItem, SettingPage, Slider, SliderState, Styled,
+    SettingField, SettingGroup, SettingItem, SettingPage, SliderState, Styled,
     ThumbwheelSensitivity, VerticalScrollSensitivity, div, h_flex, px, theme, v_flex,
 };
+use crate::ui::commit_slider::SliderControl;
 use crate::ui::theme::Typography as _;
 use gpui_base::Button as BaseButton;
 use gpui_component::radio::{Radio, RadioGroup};
@@ -62,18 +64,16 @@ pub(super) fn general_page(
     // has no tray, so no switch.
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     let group = group.item(
-        SettingItem::new(
+        switch_item(
             if cfg!(target_os = "macos") {
                 tr!("app.show_in_menu_bar")
             } else {
                 tr!("app.show_in_the_notification_area")
             },
-            SettingField::switch(
-                |cx| AppState::try_read(cx).is_some_and(|s| s.app_settings().show_in_menu_bar),
-                |enabled, cx| {
-                    AppState::apply(cx, |state| state.commit_show_in_menu_bar(enabled));
-                },
-            ),
+            |cx| AppState::try_read(cx).is_some_and(|s| s.app_settings().show_in_menu_bar),
+            |enabled, cx| {
+                AppState::apply(cx, |state| state.commit_show_in_menu_bar(enabled));
+            },
         )
         .description(if cfg!(target_os = "macos") {
             tr!("app.menu_bar_visibility_description")
@@ -126,14 +126,12 @@ fn mouse_profile_target_item() -> SettingItem {
 
 /// The smooth-scrolling switch.
 fn smooth_scrolling_item() -> SettingItem {
-    SettingItem::new(
+    switch_item(
         tr!("pointer.smooth_scrolling"),
-        SettingField::switch(
-            |cx| AppState::try_read(cx).is_some_and(|s| s.app_settings().smooth_scroll),
-            |enabled, cx| {
-                AppState::apply(cx, |state| state.commit_smooth_scroll(enabled));
-            },
-        ),
+        |cx| AppState::try_read(cx).is_some_and(|s| s.app_settings().smooth_scroll),
+        |enabled, cx| {
+            AppState::apply(cx, |state| state.commit_smooth_scroll(enabled));
+        },
     )
     .description(tr!("pointer.smooth_scrolling_description"))
 }
@@ -142,6 +140,7 @@ fn thumbwheel_sensitivity_field(slider: &Entity<SliderState>, cx: &mut App) -> g
     let value = ThumbwheelSensitivity::from_rounded(slider.read(cx).value().start());
     sensitivity_field(
         slider,
+        tr!("pointer.thumb_wheel_sensitivity"),
         value.to_string(),
         value == ThumbwheelSensitivity::DEFAULT,
         cx,
@@ -152,6 +151,7 @@ fn vertical_scroll_sensitivity_field(slider: &Entity<SliderState>, cx: &mut App)
     let value = VerticalScrollSensitivity::from_rounded(slider.read(cx).value().start());
     sensitivity_field(
         slider,
+        tr!("pointer.vertical_scroll_sensitivity"),
         value.to_string(),
         value == VerticalScrollSensitivity::DEFAULT,
         cx,
@@ -160,6 +160,7 @@ fn vertical_scroll_sensitivity_field(slider: &Entity<SliderState>, cx: &mut App)
 
 fn sensitivity_field(
     slider: &Entity<SliderState>,
+    label: gpui::SharedString,
     value: String,
     is_default: bool,
     cx: &mut App,
@@ -172,7 +173,11 @@ fn sensitivity_field(
             h_flex()
                 .items_center()
                 .gap_3()
-                .child(div().w(px(180.)).child(Slider::new(slider)))
+                .child(
+                    div()
+                        .w(px(180.))
+                        .child(SliderControl::new(slider.clone(), label).value_text(value.clone())),
+                )
                 .child(
                     div()
                         .w(px(72.))
@@ -195,14 +200,12 @@ fn sensitivity_field(
 /// The launch-at-login switch — a persisted config value the agent reads
 /// (the sunk switch); the setter never unregisters.
 fn launch_at_login_item() -> SettingItem {
-    SettingItem::new(
+    switch_item(
         tr!("app.launch_at_login"),
-        SettingField::switch(
-            |cx| AppState::try_read(cx).is_some_and(|s| s.app_settings().launch_at_login),
-            |enabled, cx| {
-                AppState::apply(cx, |state| state.commit_launch_at_login(enabled));
-            },
-        ),
+        |cx| AppState::try_read(cx).is_some_and(|s| s.app_settings().launch_at_login),
+        |enabled, cx| {
+            AppState::apply(cx, |state| state.commit_launch_at_login(enabled));
+        },
     )
     .description(if cfg!(target_os = "macos") {
         tr!("app.launch_at_login_macos_description")

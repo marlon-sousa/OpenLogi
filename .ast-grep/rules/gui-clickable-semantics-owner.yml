@@ -1,0 +1,58 @@
+# Owner: openlogi-desktop's ui::components — every interactive element is a
+# semantic primitive (gpui_base::Button and the components built on it:
+# ControlCallout, ControlTarget, MenuRow, icon_button, ...). Those carry a
+# role, an accessible name and a tab stop; a layout element with a click
+# handler has none of the three.
+id: gui-clickable-semantics-owner
+language: rust
+severity: error
+message: Interactive elements are ui::components primitives (BaseButton, ControlCallout, ControlTarget, MenuRow, icon_button); a raw clickable layout element is invisible to screen readers and to Tab.
+note: |
+  The keyboard page was built from `div().id(..).on_click(..)` callouts and
+  hotspots: twenty keys a screen reader could not see and Tab could not reach,
+  and the panel they opened was mouse-only. See docs/specs/gui-accessibility.md.
+  The rule walks the receiver chain only, so `.child(div())` arguments do not
+  match; it cannot see through a helper that returns a clickable Div.
+files:
+  - crates/openlogi-desktop/src/**/*.rs
+ignores:
+  - crates/openlogi-desktop/src/ui/components.rs
+  - crates/openlogi-desktop/src/ui/components/**
+  - crates/openlogi-desktop/src/ui/gallery.rs
+  - "**/tests.rs"
+  - "**/tests/**"
+utils:
+  layout-rooted:
+    any:
+      - pattern: div()
+      - pattern: v_flex()
+      - pattern: h_flex()
+      - pattern: svg()
+      - pattern: img($$$)
+      - kind: call_expression
+        has:
+          field: function
+          kind: field_expression
+          has:
+            field: value
+            matches: layout-rooted
+rule:
+  # Inline test harnesses may use raw elements.
+  not:
+    inside:
+      kind: mod_item
+      stopBy: end
+      has:
+        field: name
+        regex: ^tests$
+  kind: call_expression
+  has:
+    field: function
+    kind: field_expression
+    all:
+      - has:
+          field: field
+          regex: ^on_click$
+      - has:
+          field: value
+          matches: layout-rooted

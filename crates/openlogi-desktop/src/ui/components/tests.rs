@@ -7,6 +7,8 @@ use gpui::{
 
 use super::*;
 
+mod a11y;
+
 struct ToggleHarness {
     selected: bool,
     disabled: bool,
@@ -24,7 +26,7 @@ impl Render for ToggleHarness {
             .size(px(100.))
             .on_click(move |_, _, _| parent_clicks.set(parent_clicks.get() + 1))
             .child(
-                Toggle::new("keyboard-toggle")
+                Toggle::new("keyboard-toggle", "Keyboard toggle")
                     .selected(self.selected)
                     .disabled(self.disabled)
                     .on_change(move |selected, _, _| changes.set(Some(*selected))),
@@ -40,7 +42,7 @@ impl Render for MenuRowHarness {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let activations = self.activations.clone();
         div().tab_group().size(px(100.)).child(
-            MenuRow::new("keyboard-menu-row")
+            MenuRow::new("keyboard-menu-row", "Action")
                 .role(Role::MenuItem)
                 .child("Action")
                 .on_click(move |_, _, _| activations.set(activations.get() + 1)),

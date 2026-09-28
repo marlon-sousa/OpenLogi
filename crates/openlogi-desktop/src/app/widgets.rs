@@ -8,14 +8,13 @@ use gpui::{
 use gpui_component::{
     IconName, Sizable as _,
     button::{Button, ButtonVariants as _},
-    h_flex,
 };
 use openlogi_core::device::DeviceKind;
 use openlogi_core::hid::DeviceRoute;
 
 use super::AppView;
 use crate::state::AppState;
-use crate::ui::components::control_button;
+use crate::ui::components::{control_button, readout};
 use crate::ui::theme::{Palette, Typography as _};
 
 /// "← Devices" affordance on the detail screen; returns to the gallery without
@@ -27,7 +26,7 @@ pub(super) fn back_button(cx: &mut Context<AppView>) -> impl IntoElement {
         .small()
         .icon(IconName::ChevronLeft)
         .label(tr!("device.devices"))
-        .on_click(move |_, _, cx| view.update(cx, AppView::go_home))
+        .on_click(move |_, window, cx| view.update(cx, |this, cx| this.go_back(window, cx)))
 }
 
 /// Settings button in the Home header: opens the Settings window. The visible
@@ -71,7 +70,8 @@ pub(super) fn status_badge(online: bool, pal: Palette) -> impl IntoElement {
     } else {
         tr!("device.offline")
     };
-    h_flex()
+    readout("device-status", label.clone())
+        .flex()
         .gap_1()
         .items_center()
         .rounded_full()

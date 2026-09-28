@@ -16,9 +16,9 @@
 //! jumps straight from *searching* to *paired*.
 
 use gpui::{
-    App, Context, FocusHandle, FontWeight, Global, InteractiveElement, IntoElement,
+    App, Context, FocusHandle, FontWeight, Global, InteractiveElement, IntoElement, KeyBinding,
     ParentElement as _, Render, RenderOnce, SharedString, Size, StatefulInteractiveElement as _,
-    Styled as _, Subscription, Window, div, prelude::FluentBuilder as _, px, svg,
+    Styled as _, Subscription, Window, actions, div, prelude::FluentBuilder as _, px, svg,
 };
 use gpui_base::Button as BaseButton;
 use gpui_component::{
@@ -31,6 +31,7 @@ use openlogi_ipc::{FoundDevice, PairingFailure, PairingPhase};
 use crate::app::menu::{CloseWindow, Minimize, Zoom};
 use crate::services::ipc::{CancelPairing, Command, PairDevice, StartPairing};
 use crate::state::AppState;
+use crate::ui::focus::keep_focus_on_root;
 use crate::ui::theme::{self, Palette, Typography as _};
 use crate::windows::{self, AuxWindow};
 
@@ -60,13 +61,7 @@ impl Global for PairingUi {}
 /// Open the Add Device window, starting a fresh search unless one is already
 /// in flight (re-opening just focuses the existing window).
 pub fn open(cx: &mut App) {
-    let active = matches!(
-        cx.try_global::<PairingUi>(),
-        Some(
-            PairingUi::Searching | PairingUi::Found(_) | PairingUi::Pairing | PairingUi::Passkey(_)
-        )
-    );
-    if !active {
+    if !pairing_in_flight(cx) {
         start_search(cx);
     }
     windows::open_or_focus(
@@ -76,6 +71,17 @@ pub fn open(cx: &mut App) {
         AddDeviceView::new,
         cx,
     );
+}
+
+/// Whether a pairing session is running (searching, found, pairing or
+/// awaiting a passkey), as opposed to idle or finished.
+fn pairing_in_flight(cx: &App) -> bool {
+    matches!(
+        cx.try_global::<PairingUi>(),
+        Some(
+            PairingUi::Searching | PairingUi::Found(_) | PairingUi::Pairing | PairingUi::Passkey(_)
+        )
+    )
 }
 
 /// The window's native title — one definition for open and the live-language
@@ -165,22 +171,74 @@ fn start_search(cx: &mut App) {
 /// Standalone Add Device window root view.
 pub struct AddDeviceView {
     focus_handle: FocusHandle,
+    /// Returns focus to the root when the focused control disappears.
+    _keep_focus: Subscription,
     appearance_obs: Option<Subscription>,
     #[expect(dead_code, reason = "held to keep the PairingUi observer alive")]
     state_obs: Subscription,
 }
 
 impl AddDeviceView {
-    fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub(crate) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let focus_handle = cx.focus_handle();
         focus_handle.focus(window, cx);
-        let state_obs = cx.observe_global::<PairingUi>(|_, cx| cx.notify());
+        let keep_focus = keep_focus_on_root(window, cx, focus_handle.clone());
+        let mut phase = cx.try_global::<PairingUi>().map(std::mem::discriminant);
+        let state_obs = cx.observe_global_in::<PairingUi>(window, move |_, window, cx| {
+            cx.notify();
+            // A new step replaces the controls; land on its first one. Updates
+            // within a step (another device found) leave focus where it is.
+            let next = cx.try_global::<PairingUi>().map(std::mem::discriminant);
+            if next != phase {
+                phase = next;
+                land_on_first_control(window, cx);
+            }
+        });
+        land_on_first_control(window, cx);
         Self {
             focus_handle,
+            _keep_focus: keep_focus,
             appearance_obs: None,
             state_obs,
         }
     }
+}
+
+/// Move focus to the step's first control once it is drawn: the one that
+/// carries the step's status as its description, so a screen reader reads
+/// what is happening together with what to do about it.
+fn land_on_first_control(window: &mut Window, cx: &mut Context<AddDeviceView>) {
+    // From the root, so landing is idempotent: steps can follow each other
+    // within one frame, queueing two landings, and a control both steps show
+    // (Cancel) must not be the starting point of the second.
+    // Two frames: GPUI runs next-frame work before drawing that frame, and
+    // `focus_next` walks the last drawn frame's tab order, so the first frame
+    // draws the new step and the second lands on it.
+    cx.on_next_frame(window, |_, window, cx| {
+        cx.on_next_frame(window, |view, window, cx| {
+            view.focus_handle.focus(window, cx);
+            window.focus_next(cx);
+        });
+    });
+}
+
+actions!(
+    pairing,
+    [
+        /// Cancel any pairing in flight and close the Add Device window.
+        DismissAddDevice
+    ]
+);
+
+const ADD_DEVICE_CONTEXT: &str = "AddDevice";
+
+/// The Add Device window's bindings; installed with the app's others.
+pub(crate) fn bind_keys(cx: &mut App) {
+    cx.bind_keys([KeyBinding::new(
+        "escape",
+        DismissAddDevice,
+        Some(ADD_DEVICE_CONTEXT),
+    )]);
 }
 
 impl AuxWindow for AddDeviceView {
@@ -200,6 +258,13 @@ impl Render for AddDeviceView {
             .bg(pal.page)
             .text_color(pal.text_primary)
             .track_focus(&self.focus_handle)
+            .key_context(ADD_DEVICE_CONTEXT)
+            .on_action(|_: &DismissAddDevice, window, cx| {
+                if pairing_in_flight(cx) {
+                    send(cx, CancelPairing);
+                }
+                window.remove_window();
+            })
             .on_action(|_: &CloseWindow, window, _| window.remove_window())
             .on_action(|_: &Minimize, window, _| window.minimize_window())
             .on_action(|_: &Zoom, window, _| window.zoom_window())
@@ -246,6 +311,10 @@ fn pairing_body(state: PairingUi, pal: Palette) -> impl IntoElement {
                 .child(hint(tr!("pairing.pairing_mode_description"), pal))
                 .child(
                     action_button("ad-search", tr!("pairing.search_for_devices"), true)
+                        .accessibility_label(named_with_status(
+                            tr!("pairing.search_for_devices"),
+                            &tr!("pairing.pairing_mode_description"),
+                        ))
                         .on_click(|_, _, cx| start_search(cx)),
                 );
         }
@@ -253,20 +322,12 @@ fn pairing_body(state: PairingUi, pal: Palette) -> impl IntoElement {
             col = col
                 .child(status_line(tr!("pairing.searching_for_devices")))
                 .child(hint(tr!("pairing.pairing_search_hint"), pal))
-                .child(cancel_button());
+                .child(cancel_button(&status_text(&[
+                    tr!("pairing.searching_for_devices"),
+                    tr!("pairing.pairing_search_hint"),
+                ])));
         }
-        PairingUi::Found(devices) => {
-            col = col.child(status_line(tr!("pairing.searching_for_devices")));
-            if devices.is_empty() {
-                col = col.child(hint(tr!("pairing.no_devices_found_yet"), pal));
-            } else {
-                col = col.child(hint(tr!("pairing.select_a_device_to_pair"), pal));
-                for device in &devices {
-                    col = col.child(device_row(device, pal));
-                }
-            }
-            col = col.child(cancel_button());
-        }
+        PairingUi::Found(devices) => col = found_step(col, &devices, pal),
         PairingUi::Pairing => {
             col = col
                 .child(status_line(tr!("pairing.pairing")))
@@ -274,11 +335,15 @@ fn pairing_body(state: PairingUi, pal: Palette) -> impl IntoElement {
                     tr!("pairing.follow_the_instructions_on_your_device"),
                     pal,
                 ))
-                .child(cancel_button());
+                .child(cancel_button(&status_text(&[
+                    tr!("pairing.pairing"),
+                    tr!("pairing.follow_the_instructions_on_your_device"),
+                ])));
         }
         PairingUi::Passkey(method) => {
-            col = col.child(passkey_panel(&method, pal));
-            col = col.child(cancel_button());
+            col = col
+                .child(passkey_panel(&method, pal))
+                .child(cancel_button(&passkey_status(&method)));
         }
         PairingUi::Paired { slot } => {
             col = col
@@ -294,6 +359,13 @@ fn pairing_body(state: PairingUi, pal: Palette) -> impl IntoElement {
                 ))
                 .child(
                     action_button("ad-done", tr!("common.done"), false)
+                        .accessibility_label(named_with_status(
+                            tr!("common.done"),
+                            &status_text(&[
+                                tr!("pairing.device_paired"),
+                                tr!("pairing.paired_receiver_slot", slot => slot.to_string()),
+                            ]),
+                        ))
                         .on_click(|_, _, cx| send(cx, CancelPairing)),
                 );
         }
@@ -312,6 +384,13 @@ fn pairing_body(state: PairingUi, pal: Palette) -> impl IntoElement {
                 )
                 .child(
                     action_button("ad-retry", tr!("common.try_again"), true)
+                        .accessibility_label(named_with_status(
+                            tr!("common.try_again"),
+                            &status_text(&[
+                                tr!("pairing.pairing_failed"),
+                                pairing_failure_text(&failure).into(),
+                            ]),
+                        ))
                         .on_click(|_, _, cx| start_search(cx)),
                 );
         }
@@ -319,8 +398,37 @@ fn pairing_body(state: PairingUi, pal: Palette) -> impl IntoElement {
     col
 }
 
+/// Bolt discovery with results so far: the devices to pick from, or a note
+/// that none has turned up yet.
+fn found_step(col: gpui::Div, devices: &[FoundDevice], pal: Palette) -> gpui::Div {
+    let col = col.child(status_line(tr!("pairing.searching_for_devices")));
+    if devices.is_empty() {
+        return col
+            .child(hint(tr!("pairing.no_devices_found_yet"), pal))
+            .child(cancel_button(&status_text(&[
+                tr!("pairing.searching_for_devices"),
+                tr!("pairing.no_devices_found_yet"),
+            ])));
+    }
+    let status = status_text(&[
+        tr!("pairing.searching_for_devices"),
+        tr!("pairing.select_a_device_to_pair"),
+    ]);
+    col.child(hint(tr!("pairing.select_a_device_to_pair"), pal))
+        .children(
+            devices.iter().enumerate().map(|(index, device)| {
+                device_row(device, (index == 0).then(|| status.clone()), pal)
+            }),
+        )
+        .child(cancel_button(&SharedString::default()))
+}
+
 /// A discovered-device row; clicking it pairs with that device.
-fn device_row(device: &FoundDevice, pal: Palette) -> impl IntoElement {
+fn device_row(
+    device: &FoundDevice,
+    status: Option<SharedString>,
+    pal: Palette,
+) -> impl IntoElement {
     let address = device.address;
     let address_id = u64::from_be_bytes([
         0, 0, address[0], address[1], address[2], address[3], address[4], address[5],
@@ -328,6 +436,7 @@ fn device_row(device: &FoundDevice, pal: Palette) -> impl IntoElement {
     let name = SharedString::from(device.name.clone());
     BaseButton::new(("found-device", address_id))
         .accessibility_label(name.clone())
+        .when_some(status, gpui::StatefulInteractiveElement::aria_description)
         .w_full()
         .flex()
         .items_center()
@@ -432,7 +541,45 @@ fn action_button(id: &'static str, label: impl Into<SharedString>, primary: bool
     if primary { button.primary() } else { button }
 }
 
-fn cancel_button() -> impl IntoElement {
+/// Cancel, describing the step it cancels when it is the step's first
+/// control (see [`land_on_first_control`]); an empty `status` adds nothing.
+/// A gpui-kit button's accessible name with the step's status after it: that
+/// button exposes no accessible description, so the status rides in the name
+/// (an empty `status` leaves the plain name).
+fn named_with_status(name: SharedString, status: &SharedString) -> SharedString {
+    if status.is_empty() {
+        name
+    } else {
+        format!("{name}. {status}").into()
+    }
+}
+
+fn cancel_button(status: &SharedString) -> impl IntoElement {
     action_button("ad-cancel", tr!("common.cancel"), false)
+        .accessibility_label(named_with_status(tr!("common.cancel"), status))
         .on_click(|_, _, cx| send(cx, CancelPairing))
+}
+
+/// A step's status lines as one sentence for a control's description.
+fn status_text(lines: &[SharedString]) -> SharedString {
+    lines
+        .iter()
+        .map(SharedString::as_ref)
+        .collect::<Vec<_>>()
+        .join(" ")
+        .into()
+}
+
+/// The passkey step's instructions and the code itself, spoken.
+fn passkey_status(method: &PasskeyMethod) -> SharedString {
+    match method {
+        PasskeyMethod::Keyboard(digits) => status_text(&[
+            tr!("pairing.keyboard_pairing_passkey_instructions"),
+            digits.clone().into(),
+        ]),
+        PasskeyMethod::Pointer { clicks, .. } => status_text(&[
+            tr!("pairing.mouse_pairing_passkey_instructions"),
+            spoken_click_sequence(clicks).into(),
+        ]),
+    }
 }

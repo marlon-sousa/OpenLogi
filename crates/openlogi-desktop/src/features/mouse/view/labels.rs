@@ -6,17 +6,24 @@ use super::super::leader_lines::{Label, Side};
 use super::super::thumbwheel::ThumbwheelPreset;
 use crate::features::binding_editor::{GESTURE_BUTTON_ICON, action_icon_path};
 use crate::ui::action::localized_action_label;
+use crate::ui::components::ControlCallout;
 use crate::ui::theme::{self, ACCENT_BLUE, Typography as _};
 use gpui::{
-    App, ElementId, Entity, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    StatefulInteractiveElement as _, Styled, Window, div, prelude::FluentBuilder as _, px, rgb,
-    svg,
+    App, ElementId, Entity, FocusHandle, Hsla, InteractiveElement, IntoElement, ParentElement,
+    RenderOnce, Styled, Window, div, prelude::FluentBuilder as _, px, rgb, svg,
 };
-use gpui_base::Button as BaseButton;
-use gpui_component::{Icon, IconName, h_flex};
+use gpui_component::{Icon, IconName, Selectable as _, h_flex};
 use openlogi_core::binding::{Action, ButtonId, default_binding};
 
 use super::{LABEL_W, ModelRect, MouseModelView, SIDE_GAP, set_control_hovered};
+
+/// How a control card is lit: hovered or active on the device, and whether it
+/// is the control the inspector shows.
+#[derive(Clone, Copy)]
+pub(super) struct LabelState {
+    pub highlighted: bool,
+    pub selected: bool,
+}
 
 /// Position a selectable control card at the label's slot in the side gutter.
 /// Selection updates the fixed inspector; labels never own editor overlays.
@@ -24,9 +31,9 @@ pub(super) fn label_control(
     idx: usize,
     label: Label,
     binding: BindingLabel,
-    highlighted: bool,
+    state: LabelState,
     model: ModelRect,
-    selected: bool,
+    focus: &FocusHandle,
     view: &Entity<MouseModelView>,
 ) -> gpui::Div {
     let x = match label.side {
@@ -39,8 +46,9 @@ pub(super) fn label_control(
         id: ("label-trigger", idx).into(),
         label,
         binding,
-        highlighted,
-        selected,
+        highlighted: state.highlighted,
+        selected: state.selected,
+        focus: focus.clone(),
         view,
     };
     div()
@@ -101,13 +109,13 @@ struct LabelTrigger {
     binding: BindingLabel,
     highlighted: bool,
     selected: bool,
+    focus: FocusHandle,
     view: Entity<MouseModelView>,
 }
 
 impl RenderOnce for LabelTrigger {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let highlighted = self.highlighted || self.selected;
-        let selected = self.selected;
         let btn = self.label.id;
         let view = self.view;
         let click_view = view.clone();
@@ -122,11 +130,11 @@ impl RenderOnce for LabelTrigger {
         // actively highlighted control takes the accent.
         let binding_description = self.binding.text.clone();
         let button_name = tr!(self.label.id.translation_key());
-        BaseButton::new(self.id)
-            .selected(selected)
-            .accessibility_label(tr!("actions.bind_control", name => button_name.clone()))
-            .aria_description(binding_description)
-            .aria_selected(selected)
+        ControlCallout::new(self.id, button_name.clone())
+            .binding(binding_description)
+            .selected(self.selected)
+            .highlighted(self.highlighted)
+            .track_focus(&self.focus)
             .flex()
             .flex_col()
             .items_stretch()
@@ -135,34 +143,6 @@ impl RenderOnce for LabelTrigger {
             .px_3()
             .justify_center()
             .gap_0p5()
-            .rounded(pal.control_radius)
-            .border_1()
-            .border_color(if highlighted {
-                rgb(ACCENT_BLUE).into()
-            } else {
-                pal.border
-            })
-            .bg(if highlighted {
-                theme::accent_tint()
-            } else {
-                pal.control
-            })
-            .cursor_pointer()
-            .hover(move |s| {
-                s.bg(if highlighted {
-                    theme::accent_tint_hover()
-                } else {
-                    pal.control_hover
-                })
-            })
-            .focus_visible(move |s| {
-                s.bg(if highlighted {
-                    theme::accent_tint_hover()
-                } else {
-                    pal.control_hover
-                })
-                .border_color(rgb(ACCENT_BLUE))
-            })
             // Button name — the caption (xs / muted), the same size as the
             // inspector title and category headers it shares the binding flow with.
             .child(
@@ -180,7 +160,7 @@ impl RenderOnce for LabelTrigger {
             )
             .on_click(move |_event, _window, cx| {
                 click_view.update(cx, |this, cx| {
-                    this.select(btn);
+                    this.open_control(btn);
                     cx.notify();
                 });
             })

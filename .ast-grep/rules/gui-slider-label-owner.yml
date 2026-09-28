@@ -1,0 +1,24 @@
+# Owner: openlogi-desktop's ui::commit_slider::SliderControl — the one slider
+# element, focusable, named and operable from the keyboard.
+id: gui-slider-label-owner
+language: rust
+severity: error
+message: Render sliders through CommitSlider::control(label) / SliderControl::new(state, label); the stock Slider has no name and no keyboard focus.
+note: |
+  gpui_base's Slider exposes a slider role but takes no label and no focus,
+  so Tab skips it and a screen reader reads an anonymous number. See
+  docs/specs/gui-accessibility.md, gap 4.
+files:
+  - crates/openlogi-desktop/src/**/*.rs
+ignores:
+  - crates/openlogi-desktop/src/ui/commit_slider.rs
+rule:
+  # Inline test harnesses may use raw elements.
+  not:
+    inside:
+      kind: mod_item
+      stopBy: end
+      has:
+        field: name
+        regex: ^tests$
+  pattern: Slider::new($$$)

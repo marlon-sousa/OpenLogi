@@ -5678,12 +5678,14 @@ dependencies = [
 name = "openlogi-desktop"
 version = "0.8.9"
 dependencies = [
+ "accesskit_consumer",
  "anyhow",
  "appcatalog",
  "appicon",
  "derive_more",
  "disclaim",
  "embed-resource",
+ "futures-channel",
  "gpui-base",
  "gpui-component",
  "gpui-kit-assets",
@@ -5705,6 +5707,7 @@ dependencies = [
  "openlogi-ipc",
  "openlogi-permissions",
  "openlogi-ui",
+ "raw-window-handle",
  "rust-i18n",
  "serde",
  "serde_json",
@@ -5717,6 +5720,7 @@ dependencies = [
  "tracing",
  "url",
  "walkdir",
+ "windows 0.62.2",
  "winreg",
 ]
 

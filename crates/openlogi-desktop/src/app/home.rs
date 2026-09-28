@@ -39,7 +39,7 @@ use crate::features::lighting::visual as light_visual;
 use crate::services::assets::GlowGeometry;
 use crate::state::{AppState, DeviceRecord};
 use crate::ui::battery::{BatteryIndicator, glance_hint};
-use crate::ui::components::control_input;
+use crate::ui::components::{control_input, heading, icon_button, readout};
 use crate::ui::theme::{self, ContentWidth, HEADER_H, Palette, Typography as _};
 
 /// Home (gallery) top bar: title/count, the persisted layout switcher, Settings,
@@ -69,9 +69,13 @@ pub(super) fn home_header(cx: &mut Context<AppView>) -> impl IntoElement {
                 .flex_1()
                 .min_w_0()
                 .gap_0p5()
-                .child(div().text_heading().child(tr!("device.devices")))
                 .child(
-                    div()
+                    heading("home-title", 1, tr!("device.devices"))
+                        .text_heading()
+                        .child(tr!("device.devices")),
+                )
+                .child(
+                    readout("device-count", device_count_label.clone())
                         .text_caption()
                         .text_color(pal.text_muted)
                         .child(device_count_label),
@@ -399,12 +403,15 @@ pub(super) fn device_menu(
 /// The card corner's ellipsis button, opening the same menu the card offers
 /// on right-click.
 pub(super) fn device_menu_button(record: &DeviceRecord, pal: Palette) -> impl IntoElement {
-    Button::new((ElementId::from("device-menu"), record.record_key()))
-        .ghost()
-        .xsmall()
-        .text_color(pal.text_muted)
-        .icon(IconName::Ellipsis)
-        .dropdown_menu_with_anchor(Anchor::TopRight, device_menu(record))
+    icon_button(
+        (ElementId::from("device-menu"), record.record_key()),
+        IconName::Ellipsis,
+        tr!("device.device_options", name => record.display_name.clone()),
+    )
+    .ghost()
+    .xsmall()
+    .text_color(pal.text_muted)
+    .dropdown_menu_with_anchor(Anchor::TopRight, device_menu(record))
 }
 
 /// Confirm before forgetting a device: the record, its custom name, and its
@@ -449,12 +456,15 @@ fn open_rename_dialog(
             .w(px(420.))
             .title(tr!("device.rename_device"))
             .child(
-                v_flex().gap_2().child(control_input(&input)).child(
-                    div()
-                        .text_caption()
-                        .text_color(theme::palette(cx).text_muted)
-                        .child(tr!("device.leave_blank_to_use_the_model_name")),
-                ),
+                v_flex()
+                    .gap_2()
+                    .child(control_input(&input, tr!("device.device_name")))
+                    .child(
+                        div()
+                            .text_caption()
+                            .text_color(theme::palette(cx).text_muted)
+                            .child(tr!("device.leave_blank_to_use_the_model_name")),
+                    ),
             )
             .button_props(
                 DialogButtonProps::default()

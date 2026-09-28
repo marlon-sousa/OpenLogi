@@ -79,6 +79,15 @@ openlogi-device = { path = "../openlogi-device" }
 openlogi-fixture = { workspace = true }
 tempfile = "3.27.0"
 tokio = { workspace = true, features = ["test-util"] }
+# `ui::a11y_test`: a headless GPUI platform that builds the AccessKit tree.
+# Each matches the version GPUI itself links, so no second copy resolves.
+accesskit_consumer = "0.38"
+futures-channel = "0.3.32"
+raw-window-handle = "0.6"
+
+[target.'cfg(target_os = "windows")'.dev-dependencies]
+# Only to name `HWND` in `PlatformWindow::get_raw_handle`; GPUI's own version.
+windows = { version = "0.62", features = ["Win32_Foundation"] }
 
 [package.metadata.bundle]
 name = "OpenLogi"

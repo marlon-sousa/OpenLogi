@@ -50,6 +50,10 @@ preset = "프리셋"
 remove_named_item = "%{name} 제거"
 enable = "활성화"
 not_now = "나중에"
+name_value = "%{name}: %{value}"
+previous = "Previous"
+next = "Next"
+name_with_detail = "%{name} (%{detail})"
 
 [app]
 open_openlogi = "OpenLogi 열기"
@@ -131,6 +135,11 @@ quit_logi_options_hid_access = "두 앱 모두 HID++에 독점적으로 접근�
 device = "기기"
 manage_this_device = "이 기기 관리"
 usb = "USB"
+device_sections = "Device sections"
+device_name = "Device name"
+previous_device = "Previous device"
+next_device = "Next device"
+device_options = "Device options for %{name}"
 
 [profiles]
 remove_all_profiles = "Delete all app settings"
@@ -179,6 +188,7 @@ remove_profile = "프로필 삭제"
 remove_profile_dialog = "프로필 삭제…"
 select_device_button_description = "동작을 변경할 버튼을 기기에서 선택하세요."
 remove_profile_description = "이 프로필의 사용자 지정 버튼 할당을 삭제합니다. 기본 할당에는 영향을 주지 않습니다."
+search_applications_label = "Search applications"
 
 [pointer]
 mouse_button_profiles = "마우스 버튼 프로필"
@@ -249,6 +259,9 @@ high_resolution_scrolling_description = "래칫 단계 사이의 미세한 움�
 wheel_resolution_unsupported = "이 기기는 휠 해상도 제어를 지원하지 않습니다."
 wheel_resolution_other_connection = "다른 연결 방식에서는 휠 해상도를 지원하지만 현재 연결에서는 지원하지 않습니다."
 smartshift = "SmartShift"
+dpi_value = "%{value} DPI"
+remove_dpi_preset = "Remove %{value} DPI preset"
+add_current_dpi_preset = "Add current DPI as preset"
 
 [actions]
 bind_control = "%{name} 지정"
@@ -337,6 +350,7 @@ type_text_action = "“%{text}” 입력"
 workflow_step_count_singular = "워크플로(1단계)"
 workflow_step_count_plural = "워크플로(%{count}단계)"
 open_named_target = "%{name} 열기"
+search_actions_label = "Search actions"
 
 [pairing]
 add_device = "기기 추가"
@@ -491,6 +505,7 @@ color_theme = "색상 테마"
 app_icon = "앱 아이콘"
 app_icon_description = "Dock, Finder, Launchpad에 표시되는 OpenLogi 아이콘을 선택합니다."
 interface_language = "인터페이스 언어"
+search_themes = "Search themes"
 
 [diagnostics]
 diagnostics = "진단"
@@ -524,12 +539,24 @@ image = "이미지"
 streaming = "스트리밍"
 video_call = "영상 통화"
 camera_preview_platform_unavailable = "라이브 미리보기는 이 플랫폼에서 아직 지원되지 않습니다."
+auto_control = "Auto %{control}"
 
 [lighting]
 colour_temperature = "색온도"
 applying_light_setting = "조명 설정 적용 중…"
 auto_on_with_camera = "카메라 사용 시 자동 켜기"
 camera_light_auto_description = "카메라를 하나라도 사용 중이면 조명을 켜고 모든 카메라가 비활성 상태이면 끕니다."
+power = "Power"
+color = "색상"
+color_red = "Red"
+color_orange = "Orange"
+color_yellow = "Yellow"
+color_green = "Green"
+color_teal = "Teal"
+color_blue = "Blue"
+color_indigo = "Indigo"
+color_purple = "Purple"
+color_white = "White"
 
 [action_ring]
 actions_ring = "액션 링"
@@ -560,6 +587,16 @@ custom_shortcut = "사용자 지정 단축키"
 shortcut_e_g_cmd_plus_shift_plus_p = "단축키(예: Cmd+Shift+P)"
 application_folder_path_or_url = "앱, 폴더 경로 또는 URL"
 open_application_or_folder = "앱 또는 폴더 열기"
+add_shortcut = "Add shortcut"
+add_application = "Add application"
+slot_top = "Top"
+slot_top_right = "Top right"
+slot_right = "Right"
+slot_bottom_right = "Bottom right"
+slot_bottom = "Bottom"
+slot_bottom_left = "Bottom left"
+slot_left = "Left"
+slot_top_left = "Top left"
 
 [keyboard]
 editor_unavailable = "편집기를 사용할 수 없음"
@@ -573,3 +610,4 @@ play_pause_key = "재생/일시 정지 키"
 mute_key = "음소거 키"
 volume_down_key = "음량 낮추기 키"
 volume_up_key = "음량 높이기 키"
+remove_workflow_step = "Remove step %{number}: %{step}"

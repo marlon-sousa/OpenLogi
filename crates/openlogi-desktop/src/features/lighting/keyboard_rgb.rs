@@ -10,29 +10,29 @@ use gpui::{
     StatefulInteractiveElement as _, Styled, Subscription, Toggled, Window, div, px, rgb,
 };
 use gpui_base::Button as BaseButton;
-use gpui_component::{Selectable as _, h_flex, slider::Slider, v_flex};
+use gpui_component::{Selectable as _, h_flex, v_flex};
 use openlogi_core::color::Rgb;
 use openlogi_core::config::Lighting;
 
 use crate::state::{AppState, StateEvent};
 use crate::ui::commit_slider::{CommitSlider, SliderRange};
-use crate::ui::components::Toggle;
+use crate::ui::components::{Toggle, control_group};
 use crate::ui::theme::{self, Palette, Typography as _};
 
 const SWATCH: f32 = 28.;
 
-/// Preset colors. Deliberately small — covering the common keyboard accent
-/// colors.
-const PALETTE: &[Rgb] = &[
-    Rgb::new(0xff, 0x3b, 0x30),
-    Rgb::new(0xff, 0x95, 0x00),
-    Rgb::new(0xff, 0xcc, 0x00),
-    Rgb::new(0x34, 0xc7, 0x59),
-    Rgb::new(0x00, 0xc7, 0xbe),
-    Rgb::new(0x00, 0x7a, 0xff),
-    Rgb::new(0x58, 0x56, 0xd6),
-    Rgb::new(0xaf, 0x52, 0xde),
-    Rgb::WHITE,
+/// Preset colors with the catalog key of the name a screen reader speaks.
+/// Deliberately small — covering the common keyboard accent colors.
+const PALETTE: &[(Rgb, &str)] = &[
+    (Rgb::new(0xff, 0x3b, 0x30), "lighting.color_red"),
+    (Rgb::new(0xff, 0x95, 0x00), "lighting.color_orange"),
+    (Rgb::new(0xff, 0xcc, 0x00), "lighting.color_yellow"),
+    (Rgb::new(0x34, 0xc7, 0x59), "lighting.color_green"),
+    (Rgb::new(0x00, 0xc7, 0xbe), "lighting.color_teal"),
+    (Rgb::new(0x00, 0x7a, 0xff), "lighting.color_blue"),
+    (Rgb::new(0x58, 0x56, 0xd6), "lighting.color_indigo"),
+    (Rgb::new(0xaf, 0x52, 0xde), "lighting.color_purple"),
+    (Rgb::WHITE, "lighting.color_white"),
 ];
 
 pub struct LightingPanel {
@@ -81,7 +81,7 @@ impl Render for LightingPanel {
 
         let swatches: Vec<_> = PALETTE
             .iter()
-            .map(|&color| swatch(color, &lighting, pal))
+            .map(|&(color, name)| swatch(color, name, &lighting, pal))
             .collect();
 
         v_flex()
@@ -98,7 +98,7 @@ impl Render for LightingPanel {
                             .child(tr!("device.lighting")),
                     )
                     .child(
-                        Toggle::new("light-toggle")
+                        Toggle::new("light-toggle", tr!("device.lighting"))
                             .selected(lighting.enabled)
                             .on_change(|enabled, _window, cx| {
                                 AppState::apply(cx, |state| {
@@ -109,7 +109,13 @@ impl Render for LightingPanel {
                             }),
                     ),
             )
-            .child(h_flex().gap_2().flex_wrap().children(swatches))
+            .child(
+                control_group("light-swatches", tr!("lighting.color"))
+                    .flex()
+                    .gap_2()
+                    .flex_wrap()
+                    .children(swatches),
+            )
             .child(
                 h_flex()
                     .justify_between()
@@ -127,21 +133,21 @@ impl Render for LightingPanel {
                             .child(format!("{}%", self.brightness.shown(lighting.brightness))),
                     ),
             )
-            .child(Slider::new(self.brightness.slider()).horizontal())
+            .child(
+                self.brightness
+                    .control(tr!("camera.brightness"))
+                    .value_text(format!("{}%", self.brightness.shown(lighting.brightness))),
+            )
     }
 }
 
 /// One color swatch. Clicking it turns lighting on and sets that color.
-fn swatch(color: Rgb, current: &Lighting, pal: Palette) -> impl IntoElement {
+fn swatch(color: Rgb, name: &'static str, current: &Lighting, pal: Palette) -> impl IntoElement {
     let selected = current.enabled && current.color == color;
     BaseButton::new(("light-swatch", color.packed()))
         .role(Role::RadioButton)
         .selected(selected)
-        .accessibility_label(format!(
-            "{} #{:06X}",
-            tr!("device.lighting"),
-            color.packed()
-        ))
+        .accessibility_label(tr!(name))
         .aria_toggled(if selected {
             Toggled::True
         } else {

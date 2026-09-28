@@ -50,6 +50,10 @@ preset = "Esiasetus"
 remove_named_item = "Poista %{name}"
 enable = "Ota käyttöön"
 not_now = "Ei nyt"
+name_value = "%{name}: %{value}"
+previous = "Previous"
+next = "Next"
+name_with_detail = "%{name} (%{detail})"
 
 [app]
 open_openlogi = "Avaa OpenLogi"
@@ -131,6 +135,11 @@ quit_logi_options_hid_access = "Käytätkö Logi Options+ -sovellusta? Sulje se 
 device = "Laite"
 manage_this_device = "Hallitse tätä laitetta"
 usb = "USB"
+device_sections = "Device sections"
+device_name = "Device name"
+previous_device = "Previous device"
+next_device = "Next device"
+device_options = "Device options for %{name}"
 
 [profiles]
 remove_all_profiles = "Delete all app settings"
@@ -179,6 +188,7 @@ remove_profile = "Poista profiili"
 remove_profile_dialog = "Poista profiili…"
 select_device_button_description = "Valitse laitteesta painike, jonka toimintoa haluat muuttaa."
 remove_profile_description = "Tämä poistaa profiilin mukautetut painikesidonnat. Oletussidontoihin ei tehdä muutoksia."
+search_applications_label = "Search applications"
 
 [pointer]
 mouse_button_profiles = "Hiiren painikeprofiilit"
@@ -249,6 +259,9 @@ high_resolution_scrolling_description = "Tunnistaa hienovaraisemman liikkeen pyk
 wheel_resolution_unsupported = "Tämä laite ei tue vierityspyörän tarkkuuden hallintaa."
 wheel_resolution_other_connection = "Laite tukee rullan tarkkuutta toisella yhteydellään, mutta ei tällä."
 smartshift = "SmartShift"
+dpi_value = "%{value} DPI"
+remove_dpi_preset = "Remove %{value} DPI preset"
+add_current_dpi_preset = "Add current DPI as preset"
 
 [actions]
 bind_control = "Määritä %{name}"
@@ -337,6 +350,7 @@ type_text_action = "Kirjoita ”%{text}”"
 workflow_step_count_singular = "Työnkulku (1 vaihe)"
 workflow_step_count_plural = "Työnkulku (%{count} vaihetta)"
 open_named_target = "Avaa %{name}"
+search_actions_label = "Search actions"
 
 [pairing]
 add_device = "Lisää laite"
@@ -491,6 +505,7 @@ color_theme = "Väriteema"
 app_icon = "Sovelluskuvake"
 app_icon_description = "Valitse kuvake, jonka OpenLogi näyttää Dockissa, Finderissa ja Launchpadissa."
 interface_language = "Käyttöliittymän kieli"
+search_themes = "Search themes"
 
 [diagnostics]
 diagnostics = "Diagnostiikka"
@@ -524,12 +539,24 @@ image = "Kuva"
 streaming = "Suoratoisto"
 video_call = "Videopuhelu"
 camera_preview_platform_unavailable = "Live-esikatselu ei ole vielä saatavilla tällä alustalla."
+auto_control = "Auto %{control}"
 
 [lighting]
 colour_temperature = "Värilämpötila"
 applying_light_setting = "Otetaan valaistusasetusta käyttöön…"
 auto_on_with_camera = "Sytytä automaattisesti kameran kanssa"
 camera_light_auto_description = "Sytyttää valon, kun jokin kamera on käytössä, ja sammuttaa sen, kun kameroita ei käytetä."
+power = "Power"
+color = "Väri"
+color_red = "Red"
+color_orange = "Orange"
+color_yellow = "Yellow"
+color_green = "Green"
+color_teal = "Teal"
+color_blue = "Blue"
+color_indigo = "Indigo"
+color_purple = "Purple"
+color_white = "White"
 
 [action_ring]
 actions_ring = "Toimintorengas"
@@ -560,6 +587,16 @@ custom_shortcut = "Mukautettu pikanäppäin"
 shortcut_e_g_cmd_plus_shift_plus_p = "Pikanäppäin, esim. Cmd+Shift+P"
 application_folder_path_or_url = "Sovellus, kansiopolku tai URL"
 open_application_or_folder = "Avaa sovellus tai kansio"
+add_shortcut = "Add shortcut"
+add_application = "Add application"
+slot_top = "Top"
+slot_top_right = "Top right"
+slot_right = "Right"
+slot_bottom_right = "Bottom right"
+slot_bottom = "Bottom"
+slot_bottom_left = "Bottom left"
+slot_left = "Left"
+slot_top_left = "Top left"
 
 [keyboard]
 editor_unavailable = "Muokkain ei ole käytettävissä"
@@ -573,3 +610,4 @@ play_pause_key = "Toisto-/taukonäppäin"
 mute_key = "Mykistysnäppäin"
 volume_down_key = "Äänenvoimakkuuden vähennysnäppäin"
 volume_up_key = "Äänenvoimakkuuden lisäysnäppäin"
+remove_workflow_step = "Remove step %{number}: %{step}"

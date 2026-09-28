@@ -2,14 +2,12 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use gpui::{
-    AnyElement, App, AppContext as _, Context, ElementId, Entity, FocusHandle, Focusable, Hsla,
-    InteractiveElement, IntoElement, ParentElement, Render, RenderOnce,
-    StatefulInteractiveElement as _, Styled, Subscription, Window, canvas, div, hsla, img,
-    prelude::FluentBuilder as _, px, rgb,
+    AnyElement, App, AppContext as _, Context, Entity, FocusHandle, Focusable, Hsla,
+    InteractiveElement, IntoElement, KeyBinding, ParentElement, Render, RenderOnce, Styled,
+    Subscription, Window, actions, canvas, div, hsla, img, prelude::FluentBuilder as _, px, rgb,
 };
-use gpui_base::Button as BaseButton;
 use gpui_component::{
-    h_flex,
+    Selectable as _, h_flex,
     input::{InputEvent, InputState},
     v_flex,
 };
@@ -26,6 +24,8 @@ use crate::app::{glow_canvas, keyboard_glow};
 use crate::features::profiles::{friendly_app_name, profile_canvas_status};
 use crate::services::assets::{GlowGeometry, ResolvedAsset};
 use crate::state::{AppState, DeviceKey, DeviceRecord, StateEvent};
+use crate::ui::components::ControlTarget;
+use crate::ui::focus::FocusTargets;
 use crate::ui::theme::{self, ACCENT_BLUE};
 
 const SIDE_GAP: f32 = 24.;
@@ -130,6 +130,16 @@ pub struct MouseModelView {
     gesture_active_dir: Option<GestureDirection>,
     action_picker_open: bool,
     action_search: Entity<InputState>,
+    /// The inspector's landing control: the selected gesture direction, or the
+    /// current-action card. Opening a control moves focus here.
+    landing: FocusHandle,
+    /// The open picker's current choice (or its first).
+    choice_focus: FocusHandle,
+    /// Each control card's focus, so Escape can return to the card it opened.
+    callout_focus: FocusTargets<MouseControlId>,
+    /// Where focus goes on the next render, after a change that replaced the
+    /// focused element (see [`InspectorFocus`]).
+    pending_focus: Option<InspectorFocus>,
     _state_obs: Subscription,
 }
 
@@ -160,6 +170,10 @@ impl MouseModelView {
             gesture_active_dir: None,
             action_picker_open: false,
             action_search,
+            landing: cx.focus_handle(),
+            choice_focus: cx.focus_handle(),
+            callout_focus: FocusTargets::default(),
+            pending_focus: None,
             _state_obs: state_obs,
         }
     }
@@ -169,14 +183,102 @@ impl MouseModelView {
     pub(crate) fn set_gesture_selected_dir(&mut self, dir: Option<GestureDirection>) {
         self.gesture_active_dir = dir;
         self.action_picker_open = false;
+        // The landing row moves with the direction; keep focus on it.
+        self.pending_focus = Some(InspectorFocus::Landing);
     }
 
+    /// Open the picker onto its current choice, or close it back onto the
+    /// card that opened it.
     pub(super) fn toggle_action_picker(&mut self) {
         self.action_picker_open = !self.action_picker_open;
+        self.pending_focus = Some(if self.action_picker_open {
+            InspectorFocus::Choice
+        } else {
+            InspectorFocus::Landing
+        });
     }
 
+    /// Close the picker (after a pick, or a reset) and return to its card.
     pub(super) fn close_action_picker(&mut self) {
         self.action_picker_open = false;
+        self.pending_focus = Some(InspectorFocus::Landing);
+    }
+
+    /// Open a control from its card: select it and move focus into the
+    /// inspector, so a screen reader lands on what the control does now.
+    fn open_control(&mut self, control: MouseControlId) {
+        self.select(control);
+        self.pending_focus = Some(InspectorFocus::Landing);
+    }
+
+    /// Escape: close the picker, else close the inspector back to the card.
+    fn close_inspector(&mut self) {
+        if self.action_picker_open {
+            self.close_action_picker();
+        } else if let Some(control) = self.selected.take() {
+            self.gesture_active_dir = None;
+            self.pending_focus = Some(InspectorFocus::Callout(control));
+        }
+    }
+
+    /// Per-frame upkeep before reading state: the pending focus move and the
+    /// search placeholder's locale.
+    fn prepare_frame(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.apply_pending_focus(window, cx);
+        crate::ui::components::localize_placeholder(
+            &self.action_search,
+            tr!("actions.search_actions"),
+            window,
+            cx,
+        );
+    }
+
+    /// The fixed inspector for the current selection over `bound`.
+    fn inspector(
+        &self,
+        bound: InspectedBindings<'_>,
+        view: &Entity<Self>,
+        cx: &Context<Self>,
+    ) -> gpui::Div {
+        binding_inspector(
+            BindingInspectorData {
+                selected: self.selected,
+                gesture_direction: self.gesture_active_dir,
+                action_picker_open: self.action_picker_open,
+                bindings: bound.bindings,
+                gesture_maps: bound.gesture_maps,
+                dpi_gestures: bound.dpi_gestures,
+                editing_app: bound.editing_app,
+                overridden: bound.overridden,
+            },
+            super::inspector::InspectorHandles {
+                landing: &self.landing,
+                choice: &self.choice_focus,
+            },
+            &self.action_search,
+            view,
+            cx,
+        )
+    }
+
+    fn on_close_inspector(
+        &mut self,
+        _: &CloseMouseInspector,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.close_inspector();
+        cx.notify();
+    }
+
+    fn apply_pending_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let handle = match self.pending_focus.take() {
+            None => return,
+            Some(InspectorFocus::Landing) => self.landing.clone(),
+            Some(InspectorFocus::Choice) => self.choice_focus.clone(),
+            Some(InspectorFocus::Callout(control)) => self.callout_focus.handle(&control, cx),
+        };
+        handle.focus(window, cx);
     }
 
     fn reset_for_device(&mut self, device_key: Option<DeviceKey>) {
@@ -197,6 +299,47 @@ impl MouseModelView {
             self.action_picker_open = false;
         }
     }
+}
+
+/// The device's bindings the inspector shows, as read for this frame.
+#[derive(Clone, Copy)]
+struct InspectedBindings<'a> {
+    bindings: &'a BTreeMap<ButtonId, Action>,
+    gesture_maps: &'a BTreeMap<ButtonId, BTreeMap<GestureDirection, Action>>,
+    dpi_gestures: bool,
+    editing_app: Option<&'a str>,
+    overridden: Option<&'a BTreeMap<ButtonId, Action>>,
+}
+
+/// A focus move the next render makes, for a change that replaces the
+/// focused element: the new element only exists once rendered.
+#[derive(Clone, Copy)]
+enum InspectorFocus {
+    Landing,
+    Choice,
+    Callout(MouseControlId),
+}
+
+actions!(
+    mouse,
+    [
+        /// Close the action picker, else the inspector, returning focus to
+        /// what opened it.
+        CloseMouseInspector
+    ]
+);
+
+/// Key context present only while a control is selected, so Escape closes
+/// the inspector before it can leave the device page.
+const MOUSE_INSPECTOR_CONTEXT: &str = "MouseInspector";
+
+/// The Buttons page's bindings; installed with the app's others.
+pub(crate) fn bind_keys(cx: &mut App) {
+    cx.bind_keys([KeyBinding::new(
+        "escape",
+        CloseMouseInspector,
+        Some(MOUSE_INSPECTOR_CONTEXT),
+    )]);
 }
 
 impl Focusable for MouseModelView {
@@ -223,12 +366,7 @@ fn set_control_hovered(
 
 impl Render for MouseModelView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        crate::ui::components::localize_placeholder(
-            &self.action_search,
-            tr!("actions.search_actions"),
-            window,
-            cx,
-        );
+        self.prepare_frame(window, cx);
         let (empty_bindings, empty_gesture_maps) = (BTreeMap::new(), BTreeMap::new());
         let MouseWorkspaceData {
             device_key,
@@ -281,8 +419,10 @@ impl Render for MouseModelView {
             width: mouse_w,
             height: mouse_h,
         };
+        let labelled: Vec<MouseControlId> = labels_outer.iter().map(|label| label.id).collect();
         let hotspots_layer = hotspots_layer(
             &hotspots_outer,
+            &labelled,
             model,
             hovered,
             active,
@@ -301,30 +441,33 @@ impl Render for MouseModelView {
                     idx,
                     *label,
                     binding,
-                    hovered == Some(label.id) || active == Some(label.id),
+                    labels::LabelState {
+                        highlighted: hovered == Some(label.id) || active == Some(label.id),
+                        selected: self.selected == Some(label.id),
+                    },
                     model,
-                    self.selected == Some(label.id),
+                    &self.callout_focus.handle(&label.id, cx),
                     &view,
                 )
             }))
             .child(hotspots_layer);
 
-        let inspector = binding_inspector(
-            BindingInspectorData {
-                selected: self.selected,
-                gesture_direction: self.gesture_active_dir,
-                action_picker_open: self.action_picker_open,
+        let inspector = self.inspector(
+            InspectedBindings {
                 bindings,
                 gesture_maps,
                 dpi_gestures,
                 editing_app: editing_app.as_deref(),
                 overridden,
             },
-            &self.action_search,
             &view,
             cx,
         );
         workspace_layout(canvas, profile_status, inspector, &self.focus_handle)
+            .when(self.selected.is_some(), |layout| {
+                layout.key_context(MOUSE_INSPECTOR_CONTEXT)
+            })
+            .on_action(cx.listener(Self::on_close_inspector))
     }
 }
 
@@ -333,7 +476,7 @@ fn workspace_layout(
     profile_status: Option<gpui::Div>,
     inspector: impl IntoElement,
     focus_handle: &FocusHandle,
-) -> impl IntoElement {
+) -> gpui::Div {
     h_flex()
         .flex_1()
         .min_h_0()
@@ -529,6 +672,7 @@ struct ModelRect {
 
 fn hotspots_layer(
     hotspots: &[Hotspot],
+    labelled: &[MouseControlId],
     model: ModelRect,
     hovered: Option<MouseControlId>,
     active: Option<MouseControlId>,
@@ -545,6 +689,7 @@ fn hotspots_layer(
             hotspot_control(
                 idx,
                 *hotspot,
+                labelled.contains(&hotspot.id),
                 hovered,
                 active,
                 selected == Some(hotspot.id),
@@ -612,91 +757,58 @@ impl RenderOnce for Silhouette {
 fn hotspot_control(
     idx: usize,
     hotspot: Hotspot,
+    labelled: bool,
     hovered: Option<MouseControlId>,
     active: Option<MouseControlId>,
     selected: bool,
     view: &Entity<MouseModelView>,
 ) -> gpui::Div {
-    let view = view.clone();
-    let trigger = HotspotTrigger {
-        id: ("hotspot-trigger", idx).into(),
-        hotspot,
-        hovered: hovered == Some(hotspot.id) || active == Some(hotspot.id),
-        view,
-        selected,
-    };
+    let highlighted = selected || hovered == Some(hotspot.id) || active == Some(hotspot.id);
+    let btn = hotspot.id;
+    let click_view = view.clone();
+    let hover_view = view.clone();
+    let target = ControlTarget::new(("hotspot-trigger", idx), tr!(btn.translation_key()))
+        // The side label names this control and owns its tab stop when shown.
+        .pointer_only(labelled)
+        .selected(selected)
+        .flex()
+        .items_center()
+        .justify_center()
+        .w(px(hotspot.w))
+        .h(px(hotspot.h))
+        .child(
+            div()
+                .w(px(HOTSPOT_DOT))
+                .h(px(HOTSPOT_DOT))
+                .rounded_full()
+                .border_1()
+                .border_color(if highlighted {
+                    gpui::Hsla::from(rgb(ACCENT_BLUE))
+                } else {
+                    hsla(0., 0., 0.95, 0.85)
+                })
+                .bg(if highlighted {
+                    gpui::Hsla::from(rgb(ACCENT_BLUE))
+                } else {
+                    hsla(0., 0., 0.18, 0.85)
+                }),
+        )
+        .on_click(move |_event, _window, cx| {
+            click_view.update(cx, |this, cx| {
+                this.select(btn);
+                cx.notify();
+            });
+        })
+        .on_hover(move |hovered, _window, cx| {
+            set_control_hovered(&hover_view, btn, *hovered, cx);
+        });
     div()
         .absolute()
         .left(px(hotspot.x))
         .top(px(hotspot.y))
         .w(px(hotspot.w))
         .h(px(hotspot.h))
-        .child(trigger)
-}
-
-#[derive(IntoElement)]
-struct HotspotTrigger {
-    id: ElementId,
-    hotspot: Hotspot,
-    hovered: bool,
-    view: Entity<MouseModelView>,
-    selected: bool,
-}
-
-impl RenderOnce for HotspotTrigger {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        let highlighted = self.hovered || self.selected;
-        let selected = self.selected;
-        let view = self.view;
-        let click_view = view.clone();
-        let hotspot = self.hotspot;
-        let btn = hotspot.id;
-
-        BaseButton::new(self.id)
-            .selected(selected)
-            .accessibility_label(tr!(
-                "actions.bind_control",
-                name => tr!(btn.translation_key())
-            ))
-            .aria_selected(selected)
-            .flex()
-            .items_center()
-            .justify_center()
-            .w(px(hotspot.w))
-            .h(px(hotspot.h))
-            .child(
-                div()
-                    .w(px(HOTSPOT_DOT))
-                    .h(px(HOTSPOT_DOT))
-                    .rounded_full()
-                    .border_1()
-                    .border_color(if highlighted {
-                        gpui::Hsla::from(rgb(ACCENT_BLUE))
-                    } else {
-                        hsla(0., 0., 0.95, 0.85)
-                    })
-                    .bg(if highlighted {
-                        gpui::Hsla::from(rgb(ACCENT_BLUE))
-                    } else {
-                        hsla(0., 0., 0.18, 0.85)
-                    }),
-            )
-            .focus_visible(|style| {
-                style
-                    .rounded_full()
-                    .border_2()
-                    .border_color(rgb(ACCENT_BLUE))
-            })
-            .on_click(move |_event, _window, cx| {
-                click_view.update(cx, |this, cx| {
-                    this.select(btn);
-                    cx.notify();
-                });
-            })
-            .on_hover(move |hovered, _window, cx| {
-                set_control_hovered(&view, btn, *hovered, cx);
-            })
-    }
+        .child(target)
 }
 
 #[cfg(test)]
