@@ -66,6 +66,15 @@ show working local harnesses. Run the affected test, for example:
 cargo test -p openlogi-desktop gallery_renders_without_application_state
 ```
 
+- For keyboard and screen-reader behavior, assert on the accessibility tree with
+  [`ui::a11y_test`](../../../crates/openlogi-desktop/src/ui/a11y_test.rs), not
+  `TestAppContext` (its platform never builds the tree). The
+  [main-window tests](../../../crates/openlogi-desktop/src/app/tests/a11y.rs)
+  open the production windows over a fixture inventory and check names, focus
+  landings, Tab order and unnamed controls on every screen; the
+  [primitive tests](../../../crates/openlogi-desktop/src/ui/components/tests/a11y.rs)
+  cover the `ui::components` owners. Run them with `cargo test -p openlogi-desktop a11y`.
+  A live screen reader is still the acceptance check for the platform adapter.
 - Assert an interaction's visible result and owner state, not just successful render.
   Exercise the relevant negative state: disabled control, offline device, invalid
   input, empty list, or IPC failure. Do not manufacture test-only state to pass.

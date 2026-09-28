@@ -4,6 +4,41 @@ Durable "why we did it this way" records that are not obvious from the code.
 Add a dated entry when a non-obvious architectural or dependency decision is
 made or revisited.
 
+## 2026-09: Accessibility has two owners in `ui/`, and tests read the real tree
+
+A live NVDA session showed the K780 device page unusable: after Enter on the
+card, Tab and Alt+Left did nothing and the twenty key callouts did not exist
+for the screen reader. Two separate defects combined, and each now has one
+owner in `crates/openlogi-desktop/src/ui/` (spec:
+`docs/specs/gui-accessibility.md`):
+
+- **Semantics — `ui::components`.** Every interactive element is a
+  `gpui_base::Button`-based primitive whose constructor takes the accessible
+  name: `ControlCallout`/`ControlTarget` (a device control on a photo — the
+  callout owns the one tab stop, the hotspot is `pointer_only`),
+  `icon_button(id, icon, label)`, `control_switch`, `control_input(state,
+  label)`, `MenuRow::new(id, label)`, `Toggle::new(id, name)`, and
+  `CommitSlider::control(label)` — a focusable, named, keyboard-steppable
+  wrapper, because the stock `Slider` has neither a label nor focus. A missing
+  name is a compile error, not a review comment. The ast-grep guards
+  `gui-clickable-semantics-owner`, `gui-icon-button-label-owner` and
+  `gui-slider-label-owner` reject the three shapes that bypass them.
+- **Focus lifecycle — `ui::focus`.** A route transition is one method
+  (`AppView::navigate`) that moves focus to a declared landing target in the
+  same step, and every window registers `keep_focus`, which catches the focused
+  element disappearing for any undeclared reason. GPUI otherwise keeps the
+  dead focus id and dispatches keys from the root, where no context binding
+  matches.
+
+The tests read the tree a screen reader reads. GPUI's `TestAppContext`
+platform drops the accessibility-adapter callbacks, so `ui::a11y_test`
+implements the smallest headless `Platform` that keeps them: it activates the
+adapter, feeds every `TreeUpdate` into `accesskit_consumer` (the crate the OS
+adapters resolve names with) and drives the production window builders. That
+replaced the spec's planned UIA smoke script and manual NVDA passes as the
+regression proof; a live screen reader is still the acceptance check, since
+the harness cannot see the platform adapter itself.
+
 ## 2026-08: The agent stays one process; a crossing edge gets a wire, not an event layer
 
 The 2026-06 daemon split (#165) put the resident input machinery in
